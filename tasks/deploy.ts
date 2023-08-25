@@ -14,6 +14,8 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
 
   const systemContract = getAddress("systemContract", "zeta_testnet");
 
+  console.log(systemContract, "systemContract ======>");
+
   const factory = await hre.ethers.getContractFactory("ZetaSwapV2");
   const contract = await factory.deploy(systemContract);
   await contract.deployed();

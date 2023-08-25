@@ -9,8 +9,6 @@ import "@zetachain/toolkit/contracts/SwapHelperLib.sol";
 contract ZetaSwapV2 is zContract {
     SystemContract public immutable systemContract;
 
-    address public constant BITCOIN_ZRC20 = 0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
-
     constructor(address systemContractAddress) {
         systemContract = SystemContract(systemContractAddress);
     }
@@ -45,6 +43,7 @@ contract ZetaSwapV2 is zContract {
     }
 
     function onCrossChainCall(
+        zContext calldata context,
         address zrc20,
         uint256 amount,
         bytes calldata message
