@@ -7,6 +7,8 @@ import "@zetachain/toolkit/contracts/BytesHelperLib.sol";
 import "@zetachain/toolkit/contracts/SwapHelperLib.sol";
 
 contract ZetaSwapV2 is zContract {
+    error SenderNotSystemContract();
+
     SystemContract public immutable systemContract;
 
     constructor(address systemContractAddress) {
@@ -48,6 +50,9 @@ contract ZetaSwapV2 is zContract {
         uint256 amount,
         bytes calldata message
     ) external virtual override {
+        if (msg.sender != address(systemContract)) {
+            revert SenderNotSystemContract();
+        }
         (address targetZRC20, bytes32 recipient) = _getTargetAndRecipient(message);
             uint256 minAmt = 0;
             _swapAndWithdraw(
