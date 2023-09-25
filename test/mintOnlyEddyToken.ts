@@ -2,6 +2,8 @@ import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import hre from "hardhat";
 
+import { EddyBNB, EddyETH } from "../utils/common";
+
 describe("Mint EddyZEVMTOKEN to recipient", () => {
   let TokenContract: any;
   let deployer: SignerWithAddress;
@@ -19,18 +21,14 @@ describe("Mint EddyZEVMTOKEN to recipient", () => {
 
     // Initialize the contract
 
-    TokenContract = new hre.ethers.Contract(
-      "0x2A8E1F83129d349197aE5Edd29Dbe930292079aD",
-      tokenAbi,
-      deployer
-    );
+    TokenContract = new hre.ethers.Contract(EddyETH, tokenAbi, deployer);
   });
 
   it("Minting Wave tokens", async () => {
     console.log(TokenContract.mint, "token contract");
 
     // Mint Wave tokens to some user
-    const userAddress = "0x1f77e4ed1b40a976d7ef972fe2fabaa82ed690bf";
+    const userAddress = deployer.address;
 
     const initBal = await TokenContract.balanceOf(userAddress);
     console.log(initBal, "initial balance");
