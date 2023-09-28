@@ -4,7 +4,7 @@ import hre, { ethers } from "hardhat";
 
 import UniswapV2RouterABI from "../abis/uniswapV2Router.json";
 import { EddyZEVMToken } from "../typechain-types";
-import { EddyBNB, EddyBTC, EddyETH } from "../utils/common";
+import { aZeta, EddyBNB, EddyBTC, EddyETH } from "../utils/common";
 
 describe("Swap test", () => {
   let uniswapV2Router: any;
@@ -49,14 +49,14 @@ describe("Swap test", () => {
     //     address to,
     //     uint deadline
     // )
-    const tokenAInputAmount = ethers.utils.parseUnits("5");
+    const tokenAInputAmount = ethers.utils.parseUnits("0.05");
     const currentTimestampInSeconds = Math.floor(Date.now() / 1000);
     const deadline = currentTimestampInSeconds + 1000 * 60;
 
     const swapTx = await uniswapV2Router.swapExactTokensForTokens(
       tokenAInputAmount,
       0,
-      [EddyBTC, EddyBNB],
+      [EddyBTC, aZeta, EddyBNB],
       deployer.address,
       deadline
     );
@@ -66,6 +66,5 @@ describe("Swap test", () => {
     const hash = swapTx.hash;
 
     console.log("Hash for swap:", hash);
-    
   });
 });

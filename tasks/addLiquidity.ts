@@ -3,7 +3,7 @@ import { task } from "hardhat/config";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 
 import UniswapV2RouterAbi from "../abis/uniswapV2Router.json";
-import { EddyBNB, EddyBTC, EddyETH, EddyMATIC } from "../utils/common";
+import { aZeta, EddyBNB, EddyBTC, EddyETH, EddyMATIC } from "../utils/common";
 
 const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
   if (hre.network.name !== "zeta_testnet") {
@@ -13,7 +13,7 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
   }
 
   const tokenA = EddyBTC;
-  const tokenB = EddyETH;
+  const tokenB = aZeta;
 
   const [signer] = await hre.ethers.getSigners();
   console.log(`🔑 Using account: ${signer.address}\n`);

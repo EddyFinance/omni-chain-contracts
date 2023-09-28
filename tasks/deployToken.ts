@@ -13,7 +13,7 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
   console.log(`🔑 Using account: ${signer.address}\n`);
 
   const factory = await hre.ethers.getContractFactory("EddyZEVMToken");
-  const contract = await factory.deploy("EddyMATIC", "E.MATIC");
+  const contract = await factory.deploy("EddyBTC", "E.BTC");
   await contract.deployed();
 
   console.log(`🚀 Successfully deployed WAVE token contract on ZetaChain.

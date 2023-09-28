@@ -4,13 +4,13 @@ import hre from "hardhat";
 
 import UniswapV2RouterABI from "../abis/uniswapV2Router.json";
 import { EddyZEVMToken } from "../typechain-types";
-import { EddyBNB, EddyBTC, EddyETH } from "../utils/common";
+import { aZeta, EddyBNB, EddyBTC, EddyETH, EddyMATIC } from "../utils/common";
 
 describe("Add liquidity test", () => {
   let uniswapV2Router: any;
   let deployer: SignerWithAddress;
-  let tokenA = EddyBTC;
-  let tokenB = EddyETH;
+  let tokenA = EddyMATIC;
+  let tokenB = aZeta;
   let uniswapV2RouterZetachainAddr: string;
   let tokenAContract: any;
   let tokenBContract: any;
@@ -88,10 +88,22 @@ describe("Add liquidity test", () => {
   it("Adding liquidity", async () => {
     const currentTimestampInSeconds = Math.floor(Date.now() / 1000);
     const deadline = currentTimestampInSeconds + 1000 * 60;
-    const tx = await uniswapV2Router.addLiquidity(
+    // const tx = await uniswapV2Router.addLiquidity(
+    //   tokenA,
+    //   tokenB,
+    //   hre.ethers.utils.parseUnits("50"),
+    //   hre.ethers.utils.parseUnits("50"),
+    //   0,
+    //   0,
+    //   deployer.address,
+    //   deadline,
+    //   {
+    //     gasLimit: 20000000,
+    //   }
+    // );
+
+    const tx = await uniswapV2Router.addLiquidityETH(
       tokenA,
-      tokenB,
-      hre.ethers.utils.parseUnits("50"),
       hre.ethers.utils.parseUnits("50"),
       0,
       0,
@@ -99,6 +111,7 @@ describe("Add liquidity test", () => {
       deadline,
       {
         gasLimit: 20000000,
+        value: hre.ethers.utils.parseUnits("50"),
       }
     );
 
