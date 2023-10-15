@@ -5,6 +5,8 @@ import "@zetachain/toolkit/tasks";
 import "./tasks/deployToken";
 import "./tasks/createPool";
 import "./tasks/addLiquidity";
+import "./tasks/deployUniswapFactory";
+import "./tasks/deployUniswapRouter";
 
 import { getHardhatConfigNetworks } from "@zetachain/networks";
 import { HardhatUserConfig } from "hardhat/config";
@@ -34,7 +36,19 @@ const config: HardhatUserConfig = {
       {
         version: "0.8.9",
       },
+      {
+        version: "0.5.16",
+      },
+      {
+        version: "0.6.6",
+      },
     ],
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 999999,
+      },
+    },
   },
 };
 

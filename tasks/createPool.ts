@@ -3,7 +3,14 @@ import { task } from "hardhat/config";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 
 import UniswapV2FactoryAbi from "../abis/uniswapV2Factory.json";
-import { EddyBNB, EddyBTC, EddyETH, EddyMATIC } from "../utils/common";
+import {
+  aZeta,
+  EddyBNB,
+  EddyBTC,
+  EddyETH,
+  EddyMATIC,
+  ZRC20BNB,
+} from "../utils/common";
 
 const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
   if (hre.network.name !== "zeta_testnet") {
@@ -12,15 +19,15 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
     );
   }
 
-  const tokenA = EddyBTC;
-  const tokenB = EddyETH;
+  const tokenA = ZRC20BNB;
+  const tokenB = aZeta;
 
   const [signer] = await hre.ethers.getSigners();
   console.log(`🔑 Using account: ${signer.address}\n`);
 
-  // Get uniswapV2 factory contract to create pool
+  // Get uniswapV2 factory contract to create pool(Eddy deployed)
   const uniswapV2FactoryAddressZetachain =
-    "0x9fd96203f7b22bCF72d9DCb40ff98302376cE09c";
+    "0x100F5A01f26Eb4C4831CE5EFbCeE07F935BB247F";
 
   const uniswapV2FactoryContract = new hre.ethers.Contract(
     uniswapV2FactoryAddressZetachain,

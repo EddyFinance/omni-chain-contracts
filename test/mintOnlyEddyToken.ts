@@ -29,8 +29,9 @@ describe("EddyZevmToken tests", () => {
     const initBal = await TokenContract.balanceOf(userAddress);
     console.log(initBal, "initial balance");
 
-    const tx = await TokenContract.mintOwner(
-      hre.ethers.utils.parseUnits("200")
+    const tx = await TokenContract.mint(
+      "0xd7C9F3b280D4690C3232469F3BCb4361632bfC77",
+      hre.ethers.utils.parseUnits("10")
     );
 
     tx.wait();
