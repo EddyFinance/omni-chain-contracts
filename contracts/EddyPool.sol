@@ -161,8 +161,14 @@ contract ZetaSwapV2 is zContract {
         address tokenA,
         address tokenB
     ) external {
+        // Assume tokenA is native ZRC20
         // Check approval for liquidity token
         address pair = UniswapV2Library.pairFor(uniswapV2FactoryAddr, tokenA, tokenB);
+        // Check balance of Liquidity token
+        uint256 liquidityBal = IUniswapV2Pair(pair).balanceOf(msg.sender);
+
+        require(liquidityBal > liquidityAmount, "INSUFFICIENT LIQUIDITY TOKEN");
+        
         uint allowance = IUniswapV2Pair(pair).allowance(msg.sender, address(this));
 
         require(allowance > liquidityAmount, "Approval amount not sufficient for withdraw");
@@ -191,9 +197,24 @@ contract ZetaSwapV2 is zContract {
             0
         );
 
-        // withdraw the tokens
-        // Native ZRC20 withdraw
-        SwapHelperLib._doWithdrawal(tokenA, amountA + outputAmt, msg.sender);
+        if (tokenA == BTC_ZETH) {
+            // Withdrawing BTC token
+            bytes memory btcWithdrawAddress = withdrawBTCEVM[msg.sender];
+
+            uint256 withdrawableBtcAmount = amountA + outputAmt;
+
+            (, uint256 gasFee) = IZRC20(BTC_ZETH).withdrawGasFee();
+            IZRC20(BTC_ZETH).approve(BTC_ZETH, gasFee);
+            if (withdrawableBtcAmount < gasFee) revert WrongAmount();
+
+            IZRC20(BTC_ZETH).withdraw(btcWithdrawAddress, withdrawableBtcAmount - gasFee);
+        } else {
+            // withdraw the tokens
+            // Native ZRC20 withdraw
+            SwapHelperLib._doWithdrawal(tokenA, amountA + outputAmt, msg.sender);
+        }
+
+        
 
 
     }
@@ -211,7 +232,7 @@ contract ZetaSwapV2 is zContract {
         (address tokenA, address tokenB) = _getTokenPairsInPool(context.chainID);
 
         if (context.chainID == BITCOIN) {
-            // Get the bech32 bitcoin withdrawable address
+            // Get the bech32 bitcoin withdrawable address ?? does it come in bytes in case of bitcoin
             bytes memory senderAddress = bytesToBech32Bytes(context.origin, 0);
 
             address senderEvmAddress = BytesHelperLib.bytesToAddress(message, 0);
