@@ -6,12 +6,18 @@ import "@zetachain/protocol-contracts/contracts/zevm/interfaces/zContract.sol";
 import "@zetachain/toolkit/contracts/BytesHelperLib.sol";
 import "@zetachain/toolkit/contracts/SwapHelperLib.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@zetachain/protocol-contracts/contracts/evm/tools/ZetaInteractor.sol";
+import "@zetachain/protocol-contracts/contracts/evm/interfaces/ZetaInterfaces.sol";
+import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "./interfaces/IUniswapV2Pair.sol";
 
-contract ZetaSwapV2 is zContract, Ownable {
+contract ZetaSwapV2 is zContract, ZetaInteractor, ZetaReceiver {
     error SenderNotSystemContract();
     error WrongAmount();
+    error InvalidMessageType();
+
+    event CrossChainMessageEvent(string);
+    event CrossChainMessageRevertedEvent(string);
 
     SystemContract public immutable systemContract;
     address public constant uniswapV2Router02Addr =
@@ -39,8 +45,20 @@ contract ZetaSwapV2 is zContract, Ownable {
     uint256 constant MUMBAI = 80001;
     uint16 internal constant MAX_DEADLINE = 200;
 
-    constructor(address systemContractAddress) {
+    ZetaTokenConsumer private immutable _zetaConsumer;
+    IERC20 internal immutable _zetaToken;
+    bytes32 public constant CROSS_CHAIN_MESSAGE_MESSAGE_TYPE =
+        keccak256("CROSS_CHAIN_CROSS_CHAIN_MESSAGE");
+
+    constructor(
+        address systemContractAddress,
+        address connectorAddress,
+        address zetaTokenAddress,
+        address zetaConsumerAddress
+    ) ZetaInteractor(connectorAddress) {
         systemContract = SystemContract(systemContractAddress);
+        _zetaToken = IERC20(zetaTokenAddress);
+        _zetaConsumer = ZetaTokenConsumer(zetaConsumerAddress);
     }
 
     function bytesToBech32Bytes(
@@ -80,49 +98,6 @@ contract ZetaSwapV2 is zContract, Ownable {
         return withdrawBTCEVM[evmAddress].length > 0;
     }
 
-    function _addLiquidityToPools (
-        address nativeZRC20Token,
-        address zetaToken,
-        uint amountADesired,
-        address to,
-        uint deadline,
-        bool zetaDeposit
-    ) internal returns (uint amountTokenA, uint amountTokenB, uint liquidityProvided) {
-        address recipient = to;
-        uint256 deadlineForTx = deadline;
-        address tokenForLiquidity = nativeZRC20Token;
-        if (zetaDeposit) {
-            // Zeta deposit in TOKEN/ZETA Pool
-            (uint amountToken, uint amountETH, uint liquidity) = uniswapV2Router.addLiquidityETH{value: amountADesired}(
-                tokenForLiquidity,
-                0,
-                0,
-                0,
-                recipient,
-                deadlineForTx
-            );
-            amountTokenA = amountToken;
-            amountTokenB = amountETH;
-            liquidityProvided = liquidity;
-
-        } else {
-            // Token deposit in TOKEN/ZETA Pool
-            (uint amountA, uint amountB, uint liquidity) = uniswapV2Router.addLiquidity(
-                tokenForLiquidity,
-                zetaToken,
-                amountADesired,
-                0,
-                0,
-                0,
-                recipient,
-                deadlineForTx
-            );
-            amountTokenA = amountA;
-            amountTokenB = amountB;
-            liquidityProvided = liquidity;
-        }
-    }
-
     function _getTokenPairsInPool (uint256 chainID) internal view returns(address tokenA, address tokenB) {
         // Zeta token in TOKEN/ZETA pool
         tokenB = ZETA_GAS_TOKEN;
@@ -156,6 +131,74 @@ contract ZetaSwapV2 is zContract, Ownable {
         
         return outputAmount;
 
+    }
+
+    function sendMessage(
+        uint256 destinationChainId,
+        bytes destinationAddress,
+        bytes message
+    ) public payable {
+        if (!_isValidChainId(destinationChainId))
+            revert InvalidDestinationChainId();
+        uint256 crossChainGas = 2 * (10 ** 18);
+        uint256 zetaValueAndGas = _zetaConsumer.getZetaFromEth{
+            value: msg.value
+        }(address(this), crossChainGas);
+
+        _zetaToken.approve(address(connector), zetaValueAndGas);
+
+        connector.send(
+            ZetaInterfaces.SendInput({
+                destinationChainId: destinationChainId,
+                destinationAddress: interactorsByChainId[destinationChainId],
+                destinationGasLimit: 300000,
+                message: abi.encode(CROSS_CHAIN_MESSAGE_MESSAGE_TYPE, message),
+                zetaValueAndGas: zetaValueAndGas,
+                zetaParams: abi.encode("")
+            })
+        );
+    }
+
+    function onZetaMessage(
+        ZetaInterfaces.ZetaMessage calldata zetaMessage
+    ) external override isValidMessageCall(zetaMessage) {
+        (bytes32 messageType, string memory message) = abi.decode(
+            zetaMessage.message,
+            (bytes32, string)
+        );
+
+        if (messageType != CROSS_CHAIN_MESSAGE_MESSAGE_TYPE)
+            revert InvalidMessageType();
+
+        uint256 zetaAmount = zetaMessage.zetaValue;
+
+        (address tokenA, ) = _getTokenPairsInPool(zetaMessage.sourceChainId);
+
+        address senderEvmAddress = BytesHelperLib.bytesToAddress(zetaMessage.zetaTxSenderAddress, 0);
+
+        // Add liquidity
+        (, uint amountETH, uint liquidity) = 
+            uniswapV2Router.addLiquidityETH{value: zetaAmount}(
+                tokenA,
+                0,
+                0,
+                0,
+                senderEvmAddress,
+                block.timestamp + MAX_DEADLINE
+            );
+
+        require(liquidity > 0, "Failed to add liquidity");
+
+        stakedEvmAmount[senderEvmAddress][ZETA_GAS_TOKEN] += amountETH;
+
+        liquidityMinted[senderEvmAddress] += liquidity;
+
+
+        emit CrossChainMessageEvent(message);
+    }
+
+    function onZetaRevert(ZetaInterfaces.ZetaRevert calldata zetaRevert) external override isValidRevertCall(zetaRevert) {
+        // Handle the revert
     }
 
     function removeLiquidityFromPools (
@@ -192,14 +235,6 @@ contract ZetaSwapV2 is zContract, Ownable {
             block.timestamp + MAX_DEADLINE
         );
 
-        // Convert the ZETA tokens to Native ZRC
-        uint256 outputAmt = _swap(
-            tokenB,
-            amountB,
-            tokenA,
-            0
-        );
-
         if (tokenA == BTC_ZETH) {
             // Withdrawing BTC token
             bytes memory btcWithdrawAddress = bytesToBech32Bytes(addressMessage, 0);
@@ -215,7 +250,13 @@ contract ZetaSwapV2 is zContract, Ownable {
             // withdraw the tokens
             // Native ZRC20 withdraw
             bytes32 recipientEvm = BytesHelperLib.addressToBytes(msg.sender);
-            SwapHelperLib._doWithdrawal(tokenA, amountA + outputAmt, recipientEvm);
+            SwapHelperLib._doWithdrawal(tokenA, amountA, recipientEvm);
+
+            // Withdraw Zeta from Zetachain to connected chain
+            
+            sendMessage{value: amountB}(
+
+            );
         }
 
         
