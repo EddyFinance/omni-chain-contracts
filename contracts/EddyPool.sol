@@ -6,10 +6,10 @@ import "@zetachain/protocol-contracts/contracts/zevm/interfaces/zContract.sol";
 import "@zetachain/toolkit/contracts/BytesHelperLib.sol";
 import "@zetachain/toolkit/contracts/SwapHelperLib.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
-import "@uniswap/v2-periphery/contracts/libraries/UniswapV2Library.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interfaces/IUniswapV2Pair.sol";
 
-contract ZetaSwapV2 is zContract {
+contract ZetaSwapV2 is zContract, Ownable {
     error SenderNotSystemContract();
     error WrongAmount();
 
@@ -17,7 +17,7 @@ contract ZetaSwapV2 is zContract {
     address public constant uniswapV2Router02Addr =
      0x2ca7d64A7EFE2D62A725E2B35Cf7230D6677FfEe;
     address public constant uniswapV2FactoryAddr = 
-     0x9fd96203f7b22bCF72d9DCb40ff98302376cE09c
+     0x9fd96203f7b22bCF72d9DCb40ff98302376cE09c;
 
     IUniswapV2Router02 public constant uniswapV2Router =
      IUniswapV2Router02(uniswapV2Router02Addr);
@@ -88,16 +88,18 @@ contract ZetaSwapV2 is zContract {
         uint deadline,
         bool zetaDeposit
     ) internal returns (uint amountTokenA, uint amountTokenB, uint liquidityProvided) {
-
+        address recipient = to;
+        uint256 deadlineForTx = deadline;
+        address tokenForLiquidity = nativeZRC20Token;
         if (zetaDeposit) {
             // Zeta deposit in TOKEN/ZETA Pool
             (uint amountToken, uint amountETH, uint liquidity) = uniswapV2Router.addLiquidityETH{value: amountADesired}(
-                nativeZRC20Token,
+                tokenForLiquidity,
                 0,
                 0,
                 0,
-                to,
-                deadline
+                recipient,
+                deadlineForTx
             );
             amountTokenA = amountToken;
             amountTokenB = amountETH;
@@ -106,14 +108,14 @@ contract ZetaSwapV2 is zContract {
         } else {
             // Token deposit in TOKEN/ZETA Pool
             (uint amountA, uint amountB, uint liquidity) = uniswapV2Router.addLiquidity(
-                nativeZRC20Token,
+                tokenForLiquidity,
                 zetaToken,
                 amountADesired,
                 0,
                 0,
                 0,
-                to,
-                deadline
+                recipient,
+                deadlineForTx
             );
             amountTokenA = amountA;
             amountTokenB = amountB;
@@ -159,16 +161,17 @@ contract ZetaSwapV2 is zContract {
     function removeLiquidityFromPools (
         uint256 liquidityAmount,
         address tokenA,
-        address tokenB
+        address tokenB,
+        bytes calldata addressMessage
     ) external {
         // Assume tokenA is native ZRC20
         // Check approval for liquidity token
-        address pair = UniswapV2Library.pairFor(uniswapV2FactoryAddr, tokenA, tokenB);
+        address pair = SwapHelperLib.uniswapv2PairFor(uniswapV2FactoryAddr, tokenA, tokenB);
         // Check balance of Liquidity token
         uint256 liquidityBal = IUniswapV2Pair(pair).balanceOf(msg.sender);
 
         require(liquidityBal > liquidityAmount, "INSUFFICIENT LIQUIDITY TOKEN");
-        
+
         uint allowance = IUniswapV2Pair(pair).allowance(msg.sender, address(this));
 
         require(allowance > liquidityAmount, "Approval amount not sufficient for withdraw");
@@ -199,7 +202,7 @@ contract ZetaSwapV2 is zContract {
 
         if (tokenA == BTC_ZETH) {
             // Withdrawing BTC token
-            bytes memory btcWithdrawAddress = withdrawBTCEVM[msg.sender];
+            bytes memory btcWithdrawAddress = bytesToBech32Bytes(addressMessage, 0);
 
             uint256 withdrawableBtcAmount = amountA + outputAmt;
 
@@ -211,7 +214,8 @@ contract ZetaSwapV2 is zContract {
         } else {
             // withdraw the tokens
             // Native ZRC20 withdraw
-            SwapHelperLib._doWithdrawal(tokenA, amountA + outputAmt, msg.sender);
+            bytes32 recipientEvm = BytesHelperLib.addressToBytes(msg.sender);
+            SwapHelperLib._doWithdrawal(tokenA, amountA + outputAmt, recipientEvm);
         }
 
         
@@ -231,73 +235,41 @@ contract ZetaSwapV2 is zContract {
 
         (address tokenA, address tokenB) = _getTokenPairsInPool(context.chainID);
 
-        if (context.chainID == BITCOIN) {
-            // Get the bech32 bitcoin withdrawable address ?? does it come in bytes in case of bitcoin
-            bytes memory senderAddress = bytesToBech32Bytes(context.origin, 0);
+        address senderEvmAddress = BytesHelperLib.bytesToAddress(message, 0);
 
-            address senderEvmAddress = BytesHelperLib.bytesToAddress(message, 0);
-            
+        if (zrc20 == ZETA_GAS_TOKEN) {
+            // zeta deposit
+            (uint amountToken, uint amountETH, uint liquidity) = uniswapV2Router.addLiquidityETH{value: amount}(
+                tokenA,
+                0,
+                0,
+                0,
+                senderEvmAddress,
+                block.timestamp + MAX_DEADLINE
+            );
+
+            require(liquidity > 0, "Failed to add liquidity");
+
+            stakedEvmAmount[senderEvmAddress][ZETA_GAS_TOKEN] += amountETH;
+
+            liquidityMinted[senderEvmAddress] += liquidity;
+        } else {
             // ZRC20 deposit
-            (uint amountTokenA, uint amountTokenB, uint liquidityProvided) = _addLiquidityToPools(
+            (uint amountA, uint amountB, uint liquidity) = uniswapV2Router.addLiquidity(
                 tokenA,
                 tokenB,
                 amount,
+                0,
+                0,
+                0,
                 senderEvmAddress,
-                block.timestamp + MAX_DEADLINE,
-                false
+                block.timestamp + MAX_DEADLINE
             );
 
-            require(liquidityProvided > 0, "Failed to add liquidity");
+            require(liquidity > 0, "Failed to add liquidity");
 
-            // Map the BTC deposit to evm address
-            if (_evmBtcMappingExists(senderEvmAddress)) {
-                // Already staked increase staking amount
-                stakedBtcAmount[senderAddress] += amount;
-                // Increase liquidity amount
-                liquidityMinted[senderEvmAddress] += liquidityProvided;
-            } else {
-                // Create mapping and increment staking amount
-                withdrawBTCEVM[senderEvmAddress] = senderAddress;
-                stakedBtcAmount[senderAddress] += amount;
-                liquidityMinted[senderEvmAddress] += liquidityProvided;
-            }
-            
-        } else {
-            address senderAddress = BytesHelperLib.bytesToAddress(context.origin, 0);
-            if (zrc20 == ZETA_GAS_TOKEN) {
-                // zeta deposit
-                (uint amountTokenA, uint amountTokenB, uint liquidityProvided) = _addLiquidityToPools(
-                    tokenA,
-                    tokenB,
-                    amount,
-                    senderAddress,
-                    block.timestamp + MAX_DEADLINE,
-                    true
-                );
-
-                require(liquidityProvided > 0, "Failed to add liquidity");
-
-                stakedEvmAmount[senderAddress][ZETA_GAS_TOKEN] += amount;
-
-                liquidityMinted[senderAddress] += liquidityProvided;
-
-            } else {
-                // ZRC20 deposit
-                (uint amountTokenA, uint amountTokenB, uint liquidityProvided) = _addLiquidityToPools(
-                    tokenA,
-                    tokenB,
-                    amount,
-                    senderAddress,
-                    block.timestamp + MAX_DEADLINE,
-                    false
-                );
-                require(liquidityProvided > 0, "Failed to add liquidity");
-
-                stakedEvmAmount[senderAddress][zrc20] += amount;
-                liquidityMinted[senderAddress] += liquidityProvided;
-
-            }
-
+            liquidityMinted[senderEvmAddress] += liquidity;
+            stakedEvmAmount[senderEvmAddress][tokenA] += amountA;
         }
 
     }
