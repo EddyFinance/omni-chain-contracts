@@ -7,11 +7,12 @@ import "@zetachain/toolkit/contracts/BytesHelperLib.sol";
 import "@zetachain/toolkit/contracts/SwapHelperLib.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interfaces/IUniswapV2Pair.sol";
 import "./interfaces/IWZETA.sol";
 import "./interfaces/IEddyConnector.sol";
 
-contract ZetaSwapV2 is zContract {
+contract ZetaSwapV2 is zContract, Ownable {
     error SenderNotSystemContract();
     error WrongAmount();
     error InvalidMessageType();
@@ -32,6 +33,8 @@ contract ZetaSwapV2 is zContract {
     mapping (address => mapping (address => uint256)) public stakedAmount;
     // mapping (bytes => uint256) public stakedBtcAmount;
     mapping (address => uint256) public liquidityMinted;
+
+    mapping (uint256 => address) public chainIdEddyConnectorMapping;
 
     // Testnet BTC(Zeth)
     address public immutable BTC_ZETH = 0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
@@ -82,15 +85,20 @@ contract ZetaSwapV2 is zContract {
         }
     }
 
+    function setChainIdAndConnector (
+        uint256 chainId,
+        address connectorAddrress
+    ) external onlyOwner {
+        chainIdEddyConnectorMapping[chainId] = connectorAddrress;
+    }
+
     function addZetaLiquidityToPools (
-        bytes calldata senderAddress,
+        address senderEvmAddress,
         uint256 sourceChainId
     ) external payable {
         uint256 zetaAmount = msg.value;
 
         (address tokenA, ) = _getTokenPairsInPool(sourceChainId);
-
-        address senderEvmAddress = BytesHelperLib.bytesToAddress(senderAddress, 0);
 
         // Add liquidity
         (, uint amountETH, uint liquidity) = 
@@ -172,8 +180,8 @@ contract ZetaSwapV2 is zContract {
             // Withdraw Zeta from Zetachain to connected chain
             _eddyConnector.sendMessage{value: amountB}(
                 destinationChainId,
-                abi.encodePacked(msg.sender),
-                bytes("")
+                abi.encodePacked(chainIdEddyConnectorMapping[destinationChainId]),
+                abi.encodePacked(msg.sender)
             );
 
             liquidityMinted[msg.sender] -= liquidityAmount;

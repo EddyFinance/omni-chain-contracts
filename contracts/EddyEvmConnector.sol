@@ -3,10 +3,11 @@ pragma solidity 0.8.7;
 
 import "@zetachain/protocol-contracts/contracts/evm/tools/ZetaInteractor.sol";
 import "@zetachain/protocol-contracts/contracts/evm/interfaces/ZetaInterfaces.sol";
+import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "./interfaces/IWZETA.sol";
 import "./interfaces/IEddyPool.sol";
 
-contract EddyConnector is ZetaInteractor, ZetaReceiver {
+contract EddyEvmConnector is ZetaInteractor, ZetaReceiver {
 
     error InvalidMessageType();
 
@@ -14,8 +15,7 @@ contract EddyConnector is ZetaInteractor, ZetaReceiver {
     event CrossChainMessageRevertedEvent(string);
 
     ZetaTokenConsumer private immutable _zetaConsumer;
-    IWZETA internal immutable _zetaToken;
-    IEddyPool public immutable _eddyPool;
+    IERC20 internal immutable _zetaToken;
     bytes32 public constant CROSS_CHAIN_MESSAGE_MESSAGE_TYPE =
         keccak256("CROSS_CHAIN_CROSS_CHAIN_MESSAGE");
 
@@ -23,17 +23,15 @@ contract EddyConnector is ZetaInteractor, ZetaReceiver {
     constructor(
         address connectorAddress,
         address zetaTokenAddress,
-        address zetaConsumerAddress,
-        address eddyPoolAddress
+        address zetaConsumerAddress
     ) ZetaInteractor(connectorAddress) {
-        _zetaToken = IWZETA(zetaTokenAddress);
+        _zetaToken = IERC20(zetaTokenAddress);
         _zetaConsumer = ZetaTokenConsumer(zetaConsumerAddress);
-        _eddyPool = IEddyPool(eddyPoolAddress);
     }
 
     function sendMessage(
         uint256 destinationChainId,
-        bytes calldata destinationAddress,
+        bytes calldata destinationAddress, //TODO: EddyConnector in Zetachain
         bytes calldata message
     ) external payable {
         if (!_isValidChainId(destinationChainId))
@@ -69,12 +67,11 @@ contract EddyConnector is ZetaInteractor, ZetaReceiver {
             revert InvalidMessageType();
 
         uint256 zetaAmount = zetaMessage.zetaValue;
+
+        // send the user zeta
         address userAddress = message;
 
-        _eddyPool.addZetaLiquidityToPools{value: zetaAmount}(
-            userAddress,
-            zetaMessage.sourceChainId
-        );
+        _zetaToken.transferFrom(address(this), userAddress, zetaAmount);
 
         emit CrossChainMessageEvent(message);
     }

@@ -1,6 +1,6 @@
 interface IEddyPool {
     function addZetaLiquidityToPools (
-        bytes calldata senderAddress,
+        address senderEvmAddress,
         uint256 sourceChainId
     ) external payable;
 }
