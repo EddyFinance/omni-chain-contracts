@@ -11,7 +11,7 @@ contract EddyConnector is ZetaInteractor, ZetaReceiver {
     error InvalidMessageType();
 
     event CrossChainMessageEvent(address);
-    event CrossChainMessageRevertedEvent(string);
+    event CrossChainMessageRevertedEvent(address);
 
     ZetaTokenConsumer private immutable _zetaConsumer;
     IWZETA internal immutable _zetaToken;
@@ -82,13 +82,18 @@ contract EddyConnector is ZetaInteractor, ZetaReceiver {
     function onZetaRevert(
         ZetaInterfaces.ZetaRevert calldata zetaRevert
     ) external override isValidRevertCall(zetaRevert) {
-        (bytes32 messageType, string memory message) = abi.decode(
+        (bytes32 messageType, address message) = abi.decode(
             zetaRevert.message,
-            (bytes32, string)
+            (bytes32, address)
         );
 
         if (messageType != CROSS_CHAIN_MESSAGE_MESSAGE_TYPE)
             revert InvalidMessageType();
+
+        // return the zeta to the user on zetachain. User can withdraw later
+        address userAddress = message;
+
+        _zetaToken.transfer(userAddress, zetaRevert.remainingZetaValue);
 
         emit CrossChainMessageRevertedEvent(message);
     }
