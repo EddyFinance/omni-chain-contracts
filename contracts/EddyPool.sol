@@ -12,7 +12,7 @@ import "./interfaces/IUniswapV2Pair.sol";
 import "./interfaces/IWZETA.sol";
 import "./interfaces/IEddyConnector.sol";
 
-contract ZetaSwapV2 is zContract, Ownable {
+contract EddyPool is zContract, Ownable {
     error SenderNotSystemContract();
     error WrongAmount();
     error InvalidMessageType();
@@ -189,9 +189,6 @@ contract ZetaSwapV2 is zContract, Ownable {
             stakedAmount[msg.sender][ZETA_GAS_TOKEN] -= amountB;
 
         }
-
-        
-
 
     }
 
