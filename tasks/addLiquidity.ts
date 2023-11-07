@@ -13,7 +13,7 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
   }
 
   const tokenA = EddyBTC;
-  const tokenB = aZeta;
+  const tokenB = aZeta; //WZeta TOKEN
 
   const [signer] = await hre.ethers.getSigners();
   console.log(`🔑 Using account: ${signer.address}\n`);

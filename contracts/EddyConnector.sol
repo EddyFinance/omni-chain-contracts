@@ -13,22 +13,21 @@ contract EddyConnector is ZetaInteractor, ZetaReceiver {
     event CrossChainMessageEvent(address);
     event CrossChainMessageRevertedEvent(address);
 
-    ZetaTokenConsumer private immutable _zetaConsumer;
     IWZETA internal immutable _zetaToken;
-    IEddyPool public immutable _eddyPool;
+    IEddyPool public _eddyPool;
     bytes32 public constant CROSS_CHAIN_MESSAGE_MESSAGE_TYPE =
         keccak256("CROSS_CHAIN_CROSS_CHAIN_MESSAGE");
 
     
     constructor(
         address connectorAddress,
-        address zetaTokenAddress,
-        address zetaConsumerAddress,
-        address eddyPoolAddress
+        address zetaTokenAddress
     ) ZetaInteractor(connectorAddress) {
         _zetaToken = IWZETA(zetaTokenAddress);
-        _zetaConsumer = ZetaTokenConsumer(zetaConsumerAddress);
-        _eddyPool = IEddyPool(eddyPoolAddress);
+    }
+
+    function setPoolContract(address eddyPoolContract) external onlyOwner {
+        _eddyPool = IEddyPool(eddyPoolContract);
     }
 
     function sendMessage(
@@ -38,12 +37,14 @@ contract EddyConnector is ZetaInteractor, ZetaReceiver {
     ) external payable {
         if (!_isValidChainId(destinationChainId))
             revert InvalidDestinationChainId();
-        uint256 crossChainGas = 2 * (10 ** 18);
-        uint256 zetaValueAndGas = _zetaConsumer.getZetaFromEth{
-            value: msg.value
-        }(address(this), crossChainGas);
 
-        _zetaToken.approve(address(connector), zetaValueAndGas);
+        require(msg.value > 2 * (10**18), "ZETA AMOUNT INSUFFICIENT FOR GAS FEES");
+
+        // Convert native Zeta to WZeta
+        
+        _zetaToken.deposit{value: msg.value}();
+
+        _zetaToken.approve(address(connector), msg.value);
 
         connector.send(
             ZetaInterfaces.SendInput({
@@ -51,7 +52,7 @@ contract EddyConnector is ZetaInteractor, ZetaReceiver {
                 destinationAddress: destinationAddress,
                 destinationGasLimit: 300000,
                 message: abi.encode(CROSS_CHAIN_MESSAGE_MESSAGE_TYPE, message),
-                zetaValueAndGas: zetaValueAndGas,
+                zetaValueAndGas: msg.value,
                 zetaParams: abi.encode("")
             })
         );
@@ -67,8 +68,11 @@ contract EddyConnector is ZetaInteractor, ZetaReceiver {
 
         if (messageType != CROSS_CHAIN_MESSAGE_MESSAGE_TYPE)
             revert InvalidMessageType();
-
+        // WZETA 
         uint256 zetaAmount = zetaMessage.zetaValue;
+
+        // Convert WZETA to Native Zeta
+        _zetaToken.withdraw(zetaAmount);
         address userAddress = message;
 
         _eddyPool.addZetaLiquidityToPools{value: zetaAmount}(

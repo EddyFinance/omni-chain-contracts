@@ -14,7 +14,6 @@ contract EddyEvmConnector is ZetaInteractor, ZetaReceiver {
     event CrossChainMessageEvent(address);
     event CrossChainMessageRevertedEvent(address);
 
-    ZetaTokenConsumer private immutable _zetaConsumer;
     IERC20 internal immutable _zetaToken;
     bytes32 public constant CROSS_CHAIN_MESSAGE_MESSAGE_TYPE =
         keccak256("CROSS_CHAIN_CROSS_CHAIN_MESSAGE");
@@ -22,26 +21,30 @@ contract EddyEvmConnector is ZetaInteractor, ZetaReceiver {
     
     constructor(
         address connectorAddress,
-        address zetaTokenAddress,
-        address zetaConsumerAddress
+        address zetaTokenAddress
     ) ZetaInteractor(connectorAddress) {
         _zetaToken = IERC20(zetaTokenAddress);
-        _zetaConsumer = ZetaTokenConsumer(zetaConsumerAddress);
     }
 
     function sendMessage(
         uint256 destinationChainId,
         bytes calldata destinationAddress, //TODO: EddyConnector in Zetachain
-        bytes calldata message
-    ) external payable {
+        bytes calldata message,
+        uint zetaAmountForTransfer
+    ) external {
         if (!_isValidChainId(destinationChainId))
             revert InvalidDestinationChainId();
-        uint256 crossChainGas = 2 * (10 ** 18);
-        uint256 zetaValueAndGas = _zetaConsumer.getZetaFromEth{
-            value: msg.value
-        }(address(this), crossChainGas);
+        // Check approval for Zeta token
+        require(zetaAmountForTransfer > 2 * (10**18), "INSUFFICIENT AMOUNT FOR GAS");
+        uint256 allowance = _zetaToken.allowance(msg.sender, address(this));
 
-        _zetaToken.approve(address(connector), zetaValueAndGas);
+        require(allowance > zetaAmountForTransfer, "INSUFFICIENT ALLOWANCE FOR TOKEN");
+
+        // Transfer the WZeta token from user to our contract
+
+        _zetaToken.transferFrom(msg.sender, address(this), zetaAmountForTransfer);
+
+        _zetaToken.approve(address(connector), zetaAmountForTransfer);
 
         connector.send(
             ZetaInterfaces.SendInput({
@@ -49,7 +52,7 @@ contract EddyEvmConnector is ZetaInteractor, ZetaReceiver {
                 destinationAddress: destinationAddress,
                 destinationGasLimit: 300000,
                 message: abi.encode(CROSS_CHAIN_MESSAGE_MESSAGE_TYPE, message),
-                zetaValueAndGas: zetaValueAndGas,
+                zetaValueAndGas: zetaAmountForTransfer,
                 zetaParams: abi.encode("")
             })
         );
@@ -92,7 +95,7 @@ contract EddyEvmConnector is ZetaInteractor, ZetaReceiver {
         // send the user zeta
         address userAddress = message;
 
-        _zetaToken.transferFrom(address(this), userAddress, remainingZeta);
+        _zetaToken.transfer(userAddress, remainingZeta);
 
 
         emit CrossChainMessageRevertedEvent(userAddress);
