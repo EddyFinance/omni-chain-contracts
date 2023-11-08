@@ -7,6 +7,8 @@ import "./tasks/createPool";
 import "./tasks/addLiquidity";
 import "./tasks/deployUniswapFactory";
 import "./tasks/deployUniswapRouter";
+import "./tasks/deployEddyConnector";
+import "./tasks/deployEddyPool";
 
 import { getHardhatConfigNetworks } from "@zetachain/networks";
 import { HardhatUserConfig } from "hardhat/config";
@@ -32,6 +34,9 @@ const config: HardhatUserConfig = {
     compilers: [
       {
         version: "0.8.7",
+      },
+      {
+        version: "0.8.5",
       },
       {
         version: "0.8.9",
