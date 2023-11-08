@@ -10,8 +10,8 @@ contract EddyConnector is ZetaInteractor, ZetaReceiver {
 
     error InvalidMessageType();
 
-    event CrossChainMessageEvent(address);
-    event CrossChainMessageRevertedEvent(address);
+    event CrossChainMessageEvent(string);
+    event CrossChainMessageRevertedEvent(string);
 
     IWZETA internal immutable _zetaToken;
     IEddyPool public _eddyPool;
@@ -24,6 +24,16 @@ contract EddyConnector is ZetaInteractor, ZetaReceiver {
         address zetaTokenAddress
     ) ZetaInteractor(connectorAddress) {
         _zetaToken = IWZETA(zetaTokenAddress);
+    }
+
+    function bytesToAddress(
+        bytes calldata data,
+        uint256 offset
+    ) internal pure returns (address output) {
+        bytes memory b = data[offset:offset + 20];
+        assembly {
+            output := mload(add(b, 20))
+        }
     }
 
     function setPoolContract(address eddyPoolContract) external onlyOwner {
@@ -61,24 +71,25 @@ contract EddyConnector is ZetaInteractor, ZetaReceiver {
     function onZetaMessage(
         ZetaInterfaces.ZetaMessage calldata zetaMessage
     ) external override isValidMessageCall(zetaMessage) {
-        (bytes32 messageType, address message) = abi.decode(
+        (bytes32 messageType, string memory message) = abi.decode(
             zetaMessage.message,
-            (bytes32, address)
+            (bytes32, string)
         );
 
         if (messageType != CROSS_CHAIN_MESSAGE_MESSAGE_TYPE)
             revert InvalidMessageType();
         // WZETA 
         uint256 zetaAmount = zetaMessage.zetaValue;
+        address recipientAddress = bytesToAddress(zetaMessage.zetaTxSenderAddress, 0);
+        address payable senderEvmAddress = payable(recipientAddress);
 
         // Convert WZETA to Native Zeta
         _zetaToken.withdraw(zetaAmount);
-        address userAddress = message;
 
-        _eddyPool.addZetaLiquidityToPools{value: zetaAmount}(
-            userAddress,
-            zetaMessage.sourceChainId
-        );
+        // Send zeta to user
+        bool sent = senderEvmAddress.send(zetaAmount);
+
+        require(sent, "Failed to transfer Native zeta to user");
 
         emit CrossChainMessageEvent(message);
     }
@@ -86,18 +97,18 @@ contract EddyConnector is ZetaInteractor, ZetaReceiver {
     function onZetaRevert(
         ZetaInterfaces.ZetaRevert calldata zetaRevert
     ) external override isValidRevertCall(zetaRevert) {
-        (bytes32 messageType, address message) = abi.decode(
+        (bytes32 messageType, string memory message) = abi.decode(
             zetaRevert.message,
-            (bytes32, address)
+            (bytes32, string)
         );
 
         if (messageType != CROSS_CHAIN_MESSAGE_MESSAGE_TYPE)
             revert InvalidMessageType();
 
         // return the zeta to the user on zetachain. User can withdraw later
-        address userAddress = message;
+        address senderEvmAddress = zetaRevert.zetaTxSenderAddress;
 
-        _zetaToken.transfer(userAddress, zetaRevert.remainingZetaValue);
+        _zetaToken.transfer(senderEvmAddress, zetaRevert.remainingZetaValue);
 
         emit CrossChainMessageRevertedEvent(message);
     }
