@@ -7,6 +7,8 @@ import "./tasks/createPool";
 import "./tasks/addLiquidity";
 import "./tasks/deployUniswapFactory";
 import "./tasks/deployUniswapRouter";
+import "./tasks/deployEddyConnector";
+import "./tasks/deployEddyPool";
 
 import { getHardhatConfigNetworks } from "@zetachain/networks";
 import { HardhatUserConfig } from "hardhat/config";
@@ -23,12 +25,6 @@ const config: HardhatUserConfig = {
       },
     },
     ...getHardhatConfigNetworks(),
-    ethereum_goerli: {
-      // @ts-ignore
-      accounts: [process.env.PRIVATE_KEY],
-      gasPrice: 50000000000,
-      url: "https://eth-goerli.g.alchemy.com/v2/3D5U3uMqEdtpsOvbWR31SprhFxgqGr5k",
-    },
     zeta_testnet: {
       ...getHardhatConfigNetworks().zeta_testnet,
       url: "https://zetachain-athens-evm.blockpi.network/v1/rpc/public",
