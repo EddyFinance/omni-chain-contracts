@@ -202,26 +202,11 @@ contract EddyPool is zContract, Ownable {
             revert SenderNotSystemContract();
         }
 
-        (address tokenA, address tokenB) = _getTokenPairsInPool(context.chainID);
-
         address senderEvmAddress = BytesHelperLib.bytesToAddress(message, 0);
 
-        // ZRC20 deposit
-        (uint amountA, uint amountB, uint liquidity) = uniswapV2Router.addLiquidity(
-            tokenA,
-            tokenB,
-            amount,
-            0,
-            0,
-            0,
-            senderEvmAddress,
-            block.timestamp + MAX_DEADLINE
-        );
+        // Send the zrc20 to the user
 
-        require(liquidity > 0, "Failed to add liquidity");
-
-        liquidityMinted[senderEvmAddress] += liquidity;
-        stakedAmount[senderEvmAddress][tokenA] += amountA;
+        IZRC20(zrc20).transfer(senderEvmAddress, amount);
 
     }
 }

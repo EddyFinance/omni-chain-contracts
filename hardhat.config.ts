@@ -9,11 +9,17 @@ import "./tasks/deployUniswapFactory";
 import "./tasks/deployUniswapRouter";
 import "./tasks/deployEddyConnector";
 import "./tasks/deployEddyPool";
+import "./tasks/deployEddyEvmConnector";
+import "./tasks/evmConnector";
+import "./tasks/btcEncodedAddress";
 
 import { getHardhatConfigNetworks } from "@zetachain/networks";
 import { HardhatUserConfig } from "hardhat/config";
 
 const config: HardhatUserConfig = {
+  etherscan: {
+    apiKey: process.env.ETHERSCAN_API_KEY,
+  },
   mocha: {
     timeout: 400000,
   },
@@ -25,6 +31,11 @@ const config: HardhatUserConfig = {
       },
     },
     ...getHardhatConfigNetworks(),
+    polygon_mumbai: {
+      //@ts-ignore
+      accounts: [process.env.PRIVATE_KEY],
+      url: "https://polygon-mumbai.g.alchemy.com/v2/CcIjayR-uykEFwpAt7sdfBM3swhISWXE",
+    },
     zeta_testnet: {
       ...getHardhatConfigNetworks().zeta_testnet,
       url: "https://zetachain-athens-evm.blockpi.network/v1/rpc/public",

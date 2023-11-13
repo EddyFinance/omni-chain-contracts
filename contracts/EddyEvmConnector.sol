@@ -11,8 +11,8 @@ contract EddyEvmConnector is ZetaInteractor, ZetaReceiver {
 
     error InvalidMessageType();
 
-    event CrossChainMessageEvent(address);
-    event CrossChainMessageRevertedEvent(address);
+    event CrossChainMessageEvent(string);
+    event CrossChainMessageRevertedEvent(string);
 
     IERC20 internal immutable _zetaToken;
     bytes32 public constant CROSS_CHAIN_MESSAGE_MESSAGE_TYPE =
@@ -26,10 +26,25 @@ contract EddyEvmConnector is ZetaInteractor, ZetaReceiver {
         _zetaToken = IERC20(zetaTokenAddress);
     }
 
+    function bytesToAddress(
+        bytes calldata data,
+        uint256 offset
+    ) internal pure returns (address output) {
+        bytes memory b = data[offset:offset + 20];
+        assembly {
+            output := mload(add(b, 20))
+        }
+    }
+
+    function addressToBytes(
+        address someAddress
+    ) internal pure returns (bytes32) {
+        return bytes32(uint256(uint160(someAddress)));
+    }
+
     function sendMessage(
         uint256 destinationChainId,
-        bytes calldata destinationAddress, //TODO: EddyConnector in Zetachain
-        bytes calldata message,
+        address destinationAddress,
         uint zetaAmountForTransfer
     ) external {
         if (!_isValidChainId(destinationChainId))
@@ -49,9 +64,9 @@ contract EddyEvmConnector is ZetaInteractor, ZetaReceiver {
         connector.send(
             ZetaInterfaces.SendInput({
                 destinationChainId: destinationChainId,
-                destinationAddress: destinationAddress,
+                destinationAddress: abi.encode(destinationAddress),
                 destinationGasLimit: 300000,
-                message: abi.encode(CROSS_CHAIN_MESSAGE_MESSAGE_TYPE, message),
+                message: abi.encode(CROSS_CHAIN_MESSAGE_MESSAGE_TYPE, ""),
                 zetaValueAndGas: zetaAmountForTransfer,
                 zetaParams: abi.encode("")
             })
@@ -61,20 +76,21 @@ contract EddyEvmConnector is ZetaInteractor, ZetaReceiver {
     function onZetaMessage(
         ZetaInterfaces.ZetaMessage calldata zetaMessage
     ) external override isValidMessageCall(zetaMessage) {
-        (bytes32 messageType, address message) = abi.decode(
+        (bytes32 messageType, string memory message) = abi.decode(
             zetaMessage.message,
-            (bytes32, address)
+            (bytes32, string)
         );
 
         if (messageType != CROSS_CHAIN_MESSAGE_MESSAGE_TYPE)
             revert InvalidMessageType();
 
         uint256 zetaAmount = zetaMessage.zetaValue;
+        address recipientAddress = bytesToAddress(zetaMessage.zetaTxSenderAddress, 0);
+        address payable senderEvmAddress = payable(recipientAddress);
 
         // send the user zeta
-        address userAddress = message;
 
-        _zetaToken.transferFrom(address(this), userAddress, zetaAmount);
+        _zetaToken.transferFrom(address(this), senderEvmAddress, zetaAmount);
 
         emit CrossChainMessageEvent(message);
     }
@@ -82,9 +98,9 @@ contract EddyEvmConnector is ZetaInteractor, ZetaReceiver {
     function onZetaRevert(
         ZetaInterfaces.ZetaRevert calldata zetaRevert
     ) external override isValidRevertCall(zetaRevert) {
-        (bytes32 messageType, address message) = abi.decode(
+        (bytes32 messageType, string memory message) = abi.decode(
             zetaRevert.message,
-            (bytes32, address)
+            (bytes32, string)
         );
 
         if (messageType != CROSS_CHAIN_MESSAGE_MESSAGE_TYPE)
@@ -92,13 +108,12 @@ contract EddyEvmConnector is ZetaInteractor, ZetaReceiver {
 
         uint256 remainingZeta = zetaRevert.remainingZetaValue;
 
-        // send the user zeta
-        address userAddress = message;
+        // return the zeta to the user on zetachain. User can withdraw later
+        address senderEvmAddress = zetaRevert.zetaTxSenderAddress;
 
-        _zetaToken.transfer(userAddress, remainingZeta);
+        _zetaToken.transfer(senderEvmAddress, remainingZeta);
 
-
-        emit CrossChainMessageRevertedEvent(userAddress);
+        emit CrossChainMessageRevertedEvent(message);
     }
 
 }
