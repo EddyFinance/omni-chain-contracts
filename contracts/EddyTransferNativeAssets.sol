@@ -27,7 +27,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
     }
 
     function _getRecipient(bytes calldata message) internal pure returns (bytes32 recipient) {
-        address recipientAddr = BytesHelperLib.bytesToAddress(message, 20);
+        address recipientAddr = BytesHelperLib.bytesToAddress(message, 0);
         recipient = BytesHelperLib.addressToBytes(recipientAddr);
     }
 
@@ -49,7 +49,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         address zrc20
     ) external {
         if (zrc20 == BTC_ZETH) {
-            bytes memory recipientAddressBech32 = bytesToBech32Bytes(withdrawData, 20);
+            bytes memory recipientAddressBech32 = bytesToBech32Bytes(withdrawData, 0);
             (, uint256 gasFee) = IZRC20(zrc20).withdrawGasFee();
             IZRC20(zrc20).approve(zrc20, gasFee);
             if (amount < gasFee) revert WrongAmount();
