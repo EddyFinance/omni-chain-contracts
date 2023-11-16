@@ -44,24 +44,46 @@ contract EddyTransferNativeAssets is zContract, Ownable {
     }
 
     function withdrawToNativeChain(
-        bytes calldata withdrawData,
-        uint256 amount,
-        address zrc20
+    bytes calldata withdrawData,
+    uint256 amount,
+    address zrc20,
+    address targetZRC20
     ) external {
-        if (zrc20 == BTC_ZETH) {
-            bytes memory recipientAddressBech32 = bytesToBech32Bytes(withdrawData, 0);
-            (, uint256 gasFee) = IZRC20(zrc20).withdrawGasFee();
-            IZRC20(zrc20).approve(zrc20, gasFee);
-            if (amount < gasFee) revert WrongAmount();
+        bool isTargetZRC20BTC_ZETH = targetZRC20 == BTC_ZETH;
+        address tokenToUse = (targetZRC20 == zrc20) ? zrc20 : targetZRC20;
+        uint256 amountToUse = amount;
 
-            IZRC20(zrc20).withdraw(recipientAddressBech32, amount - gasFee);
-        } else {
-            // EVM withdraw
-            bytes32 recipient = _getRecipient(withdrawData);
+        // check for approval
+        uint256 allowance = IZRC20(zrc20).allowance(msg.sender, address(this));
 
-            SwapHelperLib._doWithdrawal(
+        require(allowance > amount, "Not enough allowance of ZRC20 token");
+
+        IZRC20(zrc20).transferFrom(msg.sender, address(this), amount);
+
+        if (targetZRC20 != zrc20) {
+            // swap and update the amount
+            amountToUse = _swap(
                 zrc20,
                 amount,
+                targetZRC20,
+                0
+            );
+        }
+
+        if (isTargetZRC20BTC_ZETH) {
+            bytes memory recipientAddressBech32 = bytesToBech32Bytes(withdrawData, 0);
+            (, uint256 gasFee) = IZRC20(tokenToUse).withdrawGasFee();
+            IZRC20(tokenToUse).approve(tokenToUse, gasFee);
+            if (amountToUse < gasFee) revert WrongAmount();
+
+            IZRC20(tokenToUse).withdraw(recipientAddressBech32, amountToUse - gasFee);
+        } else {
+            // EVM withdraw
+            bytes32 recipient = BytesHelperLib.addressToBytes(msg.sender);
+
+            SwapHelperLib._doWithdrawal(
+                tokenToUse,
+                amountToUse,
                 recipient
             );
         }
