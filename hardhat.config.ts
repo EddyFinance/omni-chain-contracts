@@ -12,6 +12,7 @@ import "./tasks/deployEddyPool";
 import "./tasks/deployEddyEvmConnector";
 import "./tasks/evmConnector";
 import "./tasks/btcEncodedAddress";
+import "./tasks/allowanceZRC20";
 
 import { getHardhatConfigNetworks } from "@zetachain/networks";
 import { HardhatUserConfig } from "hardhat/config";
