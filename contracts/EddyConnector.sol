@@ -1,10 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.7;
 
-import "@zetachain/protocol-contracts/contracts/evm/tools/ZetaInteractor.sol";
-import "@zetachain/protocol-contracts/contracts/evm/interfaces/ZetaInterfaces.sol";
-import "./interfaces/IWZETA.sol";
-import "./interfaces/IEddyPool.sol";
+
+// ███████╗██████╗░██████╗░██╗░░░██╗  ███████╗██╗███╗░░██╗░█████╗░███╗░░██╗░█████╗░███████╗
+// ██╔════╝██╔══██╗██╔══██╗╚██╗░██╔╝  ██╔════╝██║████╗░██║██╔══██╗████╗░██║██╔══██╗██╔════╝
+// █████╗░░██║░░██║██║░░██║░╚████╔╝░  █████╗░░██║██╔██╗██║███████║██╔██╗██║██║░░╚═╝█████╗░░
+// ██╔══╝░░██║░░██║██║░░██║░░╚██╔╝░░  ██╔══╝░░██║██║╚████║██╔══██║██║╚████║██║░░██╗██╔══╝░░
+// ███████╗██████╔╝██████╔╝░░░██║░░░  ██║░░░░░██║██║░╚███║██║░░██║██║░╚███║╚█████╔╝███████╗
+// ╚══════╝╚═════╝░╚═════╝░░░░╚═╝░░░  ╚═╝░░░░░╚═╝╚═╝░░╚══╝╚═╝░░╚═╝╚═╝░░╚══╝░╚════╝░╚══════╝
+
+import  "@zetachain/protocol-contracts/contracts/evm/tools/ZetaInteractor.sol";
+import  "@zetachain/protocol-contracts/contracts/evm/interfaces/ZetaInterfaces.sol";
+
+import {IWZETA} from  "./interfaces/IWZETA.sol";
+import {IEddyPool} from  "./interfaces/IEddyPool.sol";
 
 contract EddyConnector is ZetaInteractor, ZetaReceiver {
 
@@ -18,7 +27,6 @@ contract EddyConnector is ZetaInteractor, ZetaReceiver {
     bytes32 public constant CROSS_CHAIN_MESSAGE_MESSAGE_TYPE =
         keccak256("CROSS_CHAIN_CROSS_CHAIN_MESSAGE");
 
-    
     constructor(
         address connectorAddress,
         address zetaTokenAddress

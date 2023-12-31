@@ -7,50 +7,30 @@ import "@zetachain/toolkit/contracts/BytesHelperLib.sol";
 import "@zetachain/toolkit/contracts/SwapHelperLib.sol";
 
 contract ZetaSwapV2 is zContract {
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                       CUSTOM ERRORS                        */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
     error SenderNotSystemContract();
     error WrongAmount();
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                           EVENTS                           */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     SystemContract public immutable systemContract;
 
     // Testnet BTC(Zeth)
-    address public immutable BTC_ZETH = 0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
+    address public immutable BTC_ZETH; // 0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
 
     constructor(address systemContractAddress) {
         systemContract = SystemContract(systemContractAddress);
     }
 
-    function bytesToBech32Bytes(
-        bytes calldata data,
-        uint256 offset
-    ) internal pure returns (bytes memory) {
-        bytes memory bech32Bytes = new bytes(42);
-        for (uint i = 0; i < 42; i++) {
-            bech32Bytes[i] = data[i + offset];
-        }
-
-        return bech32Bytes;
-    }
-
-    function _getTargetRecipientForBTCWithdrawal (bytes calldata message) internal pure returns(bytes memory) {
-        return bytesToBech32Bytes(message, 20);
-    }
-
-    function _getTargetAndRecipient (
-        bytes calldata message
-    ) internal pure returns(address targetZRC20BTC, bytes32 recipientBTC) {
-        targetZRC20BTC = BytesHelperLib.bytesToAddress(message, 0);
-        address recipientAddr = BytesHelperLib.bytesToAddress(message, 20);
-        recipientBTC = BytesHelperLib.addressToBytes(recipientAddr);
-    }
-
-    function getTargetOnly (bytes calldata message) internal pure returns(address targetChain) {
-        return BytesHelperLib.bytesToAddress(message, 0);
-    }
-
-    function getRecipientOnly(bytes calldata message) internal pure returns (bytes32 recipientBTC) {
-        address recipientAddr = BytesHelperLib.bytesToAddress(message, 20);
-        recipientBTC = BytesHelperLib.addressToBytes(recipientAddr);
-    }
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                   CORE FUNCTIONS                            */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function _swap(
         address _zrc20,
@@ -110,4 +90,43 @@ contract ZetaSwapV2 is zContract {
             SwapHelperLib._doWithdrawal(targetZRC20, outputAmount, recipient);
         }
     }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                  INTERNAL HELPER FUNCTIONS                 */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function bytesToBech32Bytes(
+        bytes calldata data,
+        uint256 offset
+    ) internal pure returns (bytes memory) {
+        bytes memory bech32Bytes = new bytes(42);
+        for (uint i = 0; i < 42; i++) {
+            bech32Bytes[i] = data[i + offset];
+        }
+
+        return bech32Bytes;
+    }
+
+    function _getTargetRecipientForBTCWithdrawal (bytes calldata message) internal pure returns(bytes memory) {
+        return bytesToBech32Bytes(message, 20);
+    }
+
+    function _getTargetAndRecipient (
+        bytes calldata message
+    ) internal pure returns(address targetZRC20BTC, bytes32 recipientBTC) {
+        targetZRC20BTC = BytesHelperLib.bytesToAddress(message, 0);
+        address recipientAddr = BytesHelperLib.bytesToAddress(message, 20);
+        recipientBTC = BytesHelperLib.addressToBytes(recipientAddr);
+    }
+
+    function getTargetOnly (bytes calldata message) internal pure returns(address targetChain) {
+        return BytesHelperLib.bytesToAddress(message, 0);
+    }
+
+    function getRecipientOnly(bytes calldata message) internal pure returns (bytes32 recipientBTC) {
+        address recipientAddr = BytesHelperLib.bytesToAddress(message, 20);
+        recipientBTC = BytesHelperLib.addressToBytes(recipientAddr);
+    }
+
+
 }
