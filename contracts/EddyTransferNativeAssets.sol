@@ -14,6 +14,7 @@ import "@zetachain/protocol-contracts/contracts/zevm/interfaces/zContract.sol";
 import  "@zetachain/toolkit/contracts/BytesHelperLib.sol";
 import "@zetachain/toolkit/contracts/SwapHelperLib.sol";
 import  "@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol";
+import {IZRC20Metadata} from  "@zetachain/protocol-contracts/contracts/zevm/Interfaces.sol";
 
 // pyth dependencies
 import {IPyth} from "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
@@ -22,11 +23,6 @@ import {PythStructs} from "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
 // oz dependencies
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-// to-do
-// 1] Change rewards event name : to be consistent is it ?
-// 2] What all events param should be `indexed`
-// 3] Alternate name for address where fees is sent to owner() 
-// 4] Should we have a role based model for
 contract EddyTransferNativeAssets is zContract, Ownable {
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -75,7 +71,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
     IPyth public immutable pythNetwork;
 
     /// @dev 
-    address public immutable BTC_ZRC20; // 0x65a45c57636f9BcCeD4fe193A602008578BcA90b
+    address public immutable BTC_ZRC20; //0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
 
     /// @dev 
     mapping(address=>bytes32) addressToPriceFeed;
@@ -89,12 +85,12 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         address _BTC_ZRC20,
         address _pythNetwork,
         uint256 _feeCharge
-    ) Ownable(msg.sender) {
+    ) Ownable() {
         systemContract = SystemContract(_systemContractAddress);
         pythNetwork = IPyth(_pythNetwork);
         BTC_ZRC20 = _BTC_ZRC20;
         feeCharge = _feeCharge;
-        emit FeePercentageChanged(0, _feeCharge);
+        emit FeeChanged(0, _feeCharge);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -144,16 +140,16 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         address targetZRC20 = BytesHelperLib.bytesToAddress(message, 20);
 
         // Fetch zrc20 token price into currentPrice
-        bytes[] updateData;
+        bytes[] memory updateData;
         uint256 updateFee = pythNetwork.getUpdateFee(updateData);
         pythNetwork.updatePriceFeeds{value : updateFee}(updateData);
-        PythStructs memory currentPriceStruct = pythNetwork.getPrice(addressToPriceFeed[zrc20]);
-        currentPrice = convertToUint(currentPriceStruct, IZRC20(zrc20).decimals());
+        PythStructs.Price memory currentPriceStruct = pythNetwork.getPrice(addressToPriceFeed[zrc20]);
+        uint256 currentPrice = convertToUint(currentPriceStruct, IZRC20Metadata(zrc20).decimals());
         emit EddyRewards(zrc20, currentPrice, senderEvmAddress);
         // we could also emit out the exact dollar denominated value, but can also do that offchain to save gas
 
         // need to think of rounding precision errors
-        uint256 feeToCharge = ( amount * feePercentage ) / 10000 ; 
+        uint256 feeToCharge = ( amount * feeCharge ) / 10000 ; 
         
         // same token
         if (targetZRC20 == zrc20) {
@@ -221,7 +217,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         }
 
         // need to think of rounding precision errors
-        uint256 feeToCharge = ( amount * feePercentage ) / 10000 ; 
+        uint256 feeToCharge = ( amount * feeCharge ) / 10000 ; 
 
         // understand how btc withdrawal works
         if (isTargetZRC20BTC_ZRC20) {

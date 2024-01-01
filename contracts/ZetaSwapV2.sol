@@ -1,36 +1,178 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.7;
 
+// ███████╗██████╗░██████╗░██╗░░░██╗  ███████╗██╗███╗░░██╗░█████╗░███╗░░██╗░█████╗░███████╗
+// ██╔════╝██╔══██╗██╔══██╗╚██╗░██╔╝  ██╔════╝██║████╗░██║██╔══██╗████╗░██║██╔══██╗██╔════╝
+// █████╗░░██║░░██║██║░░██║░╚████╔╝░  █████╗░░██║██╔██╗██║███████║██╔██╗██║██║░░╚═╝█████╗░░
+// ██╔══╝░░██║░░██║██║░░██║░░╚██╔╝░░  ██╔══╝░░██║██║╚████║██╔══██║██║╚████║██║░░██╗██╔══╝░░
+// ███████╗██████╔╝██████╔╝░░░██║░░░  ██║░░░░░██║██║░╚███║██║░░██║██║░╚███║╚█████╔╝███████╗
+// ╚══════╝╚═════╝░╚═════╝░░░░╚═╝░░░  ╚═╝░░░░░╚═╝╚═╝░░╚══╝╚═╝░░╚═╝╚═╝░░╚══╝░╚════╝░╚══════╝
+
+// zeta dependencies
 import "@zetachain/protocol-contracts/contracts/zevm/SystemContract.sol";
 import "@zetachain/protocol-contracts/contracts/zevm/interfaces/zContract.sol";
 import "@zetachain/toolkit/contracts/BytesHelperLib.sol";
 import "@zetachain/toolkit/contracts/SwapHelperLib.sol";
+import {IZRC20Metadata} from  "@zetachain/protocol-contracts/contracts/zevm/Interfaces.sol";
 
-contract ZetaSwapV2 is zContract {
+// pyth dependencies
+import {IPyth} from "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
+import {PythStructs} from "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
+
+// oz dependencies
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract ZetaSwapV2 is zContract, Ownable {
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       CUSTOM ERRORS                        */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    error SenderNotSystemContract();
+    /// @dev Contract call made is not from Zeta's TSS address
+    error SenderNotSystemContract(address falseCaller);
+    
+    /// @dev Not enough final amount (less gas fees) to withdraw to native chain
     error WrongAmount();
+
+    /// @dev Input array's length not same
+    error InvalidInput();
+
+    /// @dev Invalid Price 
+    error InvalidPrice();
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                           EVENTS                           */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
+    /// @dev 
+    event EddyRewards(address indexed zrc20, uint256 indexed currentPrice, address indexed user);
+
+    /// @dev
+    event FeeChanged(uint256 indexed oldBP, uint256 indexed newBP);
+
+    /// @dev
+    // also have to include swap amount @ask
+    event EddySwap(address indexed zrc20, address indexed targetZRC20, bytes32 indexed recipient);
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                          STORAGE                           */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @dev feePercentage is represented in basis points [ 1% == 100 bp ]
+    uint256 public feeCharge;
+    
+    /// @dev Instance of SystemContract used for calling Zeta's TSS Address
     SystemContract public immutable systemContract;
 
-    // Testnet BTC(Zeth)
-    address public immutable BTC_ZETH; // 0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
+    /// @dev Instance of Pyth Oracle Data Provider
+    IPyth public immutable pythNetwork;
 
-    constructor(address systemContractAddress) {
-        systemContract = SystemContract(systemContractAddress);
+    /// @dev 
+    address public immutable BTC_ZRC20; //0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
+
+    /// @dev 
+    mapping(address=>bytes32) addressToPriceFeed;
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                       CONSTRUCTOR                          */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    constructor(
+        address _systemContractAddress,
+        address _BTC_ZRC20,
+        address _pythNetwork,
+        uint256 _feeCharge
+    ) Ownable() {
+        systemContract = SystemContract(_systemContractAddress);
+        pythNetwork = IPyth(_pythNetwork);
+        BTC_ZRC20 = _BTC_ZRC20;
+        feeCharge = _feeCharge;
+        emit FeeChanged(0, _feeCharge);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                          ADMIN                             */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function initializePriceFeedId(address[] memory _zrcAddresses, bytes32[] memory _priceIds) external onlyOwner {
+        if( _zrcAddresses.length != _priceIds.length ){
+            revert InvalidInput();
+        }
+        uint256 len = _zrcAddresses.length;
+        for ( uint256 i; i<len;){
+            addressToPriceFeed[_zrcAddresses[i]] = _priceIds[i];
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /// trying something new here, emitting before state changes. 
+    /// idk why this would fail : ask 
+    function setFeeCharge(uint256 _newFeeCharge) external onlyOwner {
+        emit FeeChanged(feeCharge,_newFeeCharge);
+        feeCharge = _newFeeCharge;     
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                   CORE FUNCTIONS                            */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function onCrossChainCall(
+        zContext calldata context,
+        address zrc20,
+        uint256 amount,
+        bytes calldata message
+    ) external virtual override {
+        if (msg.sender != address(systemContract)) {
+            revert SenderNotSystemContract(msg.sender);
+        }
+
+        // Extract metadata from input
+        bytes32 recipient = getRecipientOnly(message);
+        address targetZRC20 = getTargetOnly(message);
+        uint256 minAmt = 0;
+
+        // Fetch zrc20 token price into currentPrice
+        bytes[] memory updateData;
+        uint256 updateFee = pythNetwork.getUpdateFee(updateData);
+        pythNetwork.updatePriceFeeds{value : updateFee}(updateData);
+        PythStructs.Price memory currentPriceStruct = pythNetwork.getPrice(addressToPriceFeed[zrc20]);
+        uint256 currentPrice = convertToUint(currentPriceStruct, IZRC20Metadata(zrc20).decimals());
+        // should the rewards be accounted for recipient?
+        // emit EddyRewards(zrc20, currentPrice, senderEvmAddress);
+
+        // need to think of rounding precision errors
+        uint256 feeToCharge = ( amount * feeCharge ) / 10000 ; 
+
+        // Send fees to owner()
+        IZRC20(zrc20).transfer(owner(), feeToCharge);
+
+         if (targetZRC20 == BTC_ZRC20) {
+            
+            bytes memory recipientAddressBech32 = bytesToBech32Bytes(message, 20);
+            uint256 outputAmount = _swap(
+                zrc20,
+                amount-feeToCharge,
+                targetZRC20,
+                minAmt
+            );
+            (, uint256 gasFee) = IZRC20(targetZRC20).withdrawGasFee();
+            IZRC20(targetZRC20).approve(targetZRC20, gasFee);
+            if (outputAmount < gasFee) revert WrongAmount();
+
+            IZRC20(targetZRC20).withdraw(recipientAddressBech32, outputAmount - gasFee);
+        } else {
+            uint256 outputAmount = _swap(
+                zrc20,
+                amount-feeToCharge,
+                targetZRC20,
+                minAmt
+            );
+            SwapHelperLib._doWithdrawal(targetZRC20, outputAmount, recipient);
+        }
+        emit EddySwap(zrc20,targetZRC20,getRecipientOnly(message));
+    }
 
     function _swap(
         address _zrc20,
@@ -50,50 +192,34 @@ contract ZetaSwapV2 is zContract {
         );
         
         return outputAmount;
-
     }
 
-    function onCrossChainCall(
-        zContext calldata context,
-        address zrc20,
-        uint256 amount,
-        bytes calldata message
-    ) external virtual override {
-        if (msg.sender != address(systemContract)) {
-            revert SenderNotSystemContract();
-        }
-
-        address targetZRC20 = getTargetOnly(message);
-        uint256 minAmt = 0;
-
-         if (targetZRC20 == BTC_ZETH) {
-            bytes memory recipientAddressBech32 = bytesToBech32Bytes(message, 20);
-            uint256 outputAmount = _swap(
-                zrc20,
-                amount,
-                targetZRC20,
-                minAmt
-            );
-            (, uint256 gasFee) = IZRC20(targetZRC20).withdrawGasFee();
-            IZRC20(targetZRC20).approve(targetZRC20, gasFee);
-            if (outputAmount < gasFee) revert WrongAmount();
-
-            IZRC20(targetZRC20).withdraw(recipientAddressBech32, outputAmount - gasFee);
-        } else {
-            bytes32 recipient = getRecipientOnly(message);
-            uint256 outputAmount = _swap(
-                zrc20,
-                amount,
-                targetZRC20,
-                minAmt
-            );
-            SwapHelperLib._doWithdrawal(targetZRC20, outputAmount, recipient);
-        }
-    }
+    
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                  INTERNAL HELPER FUNCTIONS                 */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function convertToUint(
+        PythStructs.Price memory price,
+        uint8 targetDecimals
+    ) private pure returns (uint256) {
+        if (price.price < 0 || price.expo > 0 || price.expo < -255) {
+            revert InvalidPrice();
+        }
+
+        uint8 priceDecimals = uint8(uint32(-1 * price.expo));
+
+        if (targetDecimals >= priceDecimals) {
+            return
+                uint(uint64(price.price)) *
+                10 ** uint32(targetDecimals - priceDecimals);
+        } else {
+            return
+                uint(uint64(price.price)) /
+                10 ** uint32(priceDecimals - targetDecimals);
+        }
+    }
 
     function bytesToBech32Bytes(
         bytes calldata data,
