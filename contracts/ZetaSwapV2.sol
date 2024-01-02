@@ -22,6 +22,8 @@ import {PythStructs} from "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
 // oz dependencies
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+/// @author proxima424 <https://github.com/proxima424>
+/// @author add abhishek's creds
 contract ZetaSwapV2 is zContract, Ownable {
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

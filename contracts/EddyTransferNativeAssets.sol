@@ -23,6 +23,8 @@ import {PythStructs} from "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
 // oz dependencies
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+/// @author proxima424 <https://github.com/proxima424>
+/// @author add abhishek's creds
 contract EddyTransferNativeAssets is zContract, Ownable {
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -52,7 +54,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
     event EddyNativeTokenAssetWithdrawn(address indexed zrc20, uint256 indexed amount, bytes indexed user);
 
     /// @dev 
-    event EddyRewards(address indexed zrc20, uint256 indexed currentPrice, address indexed user);
+    event EddyRewards(address indexed zrc20, uint256 indexed currentPrice, address indexed user, uint256 amount);
 
     /// @dev
     event FeeChanged(uint256 indexed oldBP, uint256 indexed newBP);
@@ -145,7 +147,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         pythNetwork.updatePriceFeeds{value : updateFee}(updateData);
         PythStructs.Price memory currentPriceStruct = pythNetwork.getPrice(addressToPriceFeed[zrc20]);
         uint256 currentPrice = convertToUint(currentPriceStruct, IZRC20Metadata(zrc20).decimals());
-        emit EddyRewards(zrc20, currentPrice, senderEvmAddress);
+        emit EddyRewards(zrc20, currentPrice, senderEvmAddress, amount);
         // we could also emit out the exact dollar denominated value, but can also do that offchain to save gas
 
         // need to think of rounding precision errors
@@ -169,6 +171,62 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         emit EddyNativeTokenAssetDeposited(senderEvmAddress, amount, senderEvmAddress);
     }
 
+    function withdrawToNativeChain(
+        bytes calldata withdrawData,
+        uint256 amount,
+        address zrc20,
+        address targetZRC20
+    ) external {
+        bool isTargetZRC20BTC_ZRC20 = (targetZRC20 == BTC_ZRC20);
+        address tokenToUse = (targetZRC20 == zrc20) ? zrc20 : targetZRC20;
+        uint256 amountToUse = amount;
+
+        // check for approval
+        uint256 allowance = IZRC20(zrc20).allowance(msg.sender, address(this));
+        require(allowance > amount, "Not enough allowance of ZRC20 token");
+
+        IZRC20(zrc20).transferFrom(msg.sender, address(this), amount);
+
+        // need to think of rounding precision errors
+        uint256 feeToCharge = ( amount * feeCharge ) / 10000 ;
+
+        // transfer fees
+        IRZ20(zrc20).transfer(owner(), feeToCharge);
+
+        /// @add minimum amount quote
+        if (targetZRC20 != zrc20) {
+            // swap and update the amount
+            amountToUse = _swap(
+                zrc20,
+                amount-feeToCharge,
+                targetZRC20,
+                0
+            );
+        }
+
+        // @add Eddyrewardsevent
+
+        // understand how btc withdrawal works
+        if (isTargetZRC20BTC_ZRC20) {
+            bytes memory recipientAddressBech32 = bytesToBech32Bytes(withdrawData, 0);
+            (, uint256 gasFee) = IZRC20(tokenToUse).withdrawGasFee();
+            IZRC20(tokenToUse).approve(tokenToUse, gasFee);
+            if (amountToUse < gasFee) revert WrongAmount();
+            IZRC20(tokenToUse).withdraw(recipientAddressBech32, amountToUse - gasFee);
+        } else {
+            // EVM withdraw
+            bytes32 recipient = BytesHelperLib.addressToBytes(msg.sender);
+            SwapHelperLib._doWithdrawal(
+                tokenToUse,
+                amountToUse,
+                recipient
+            );
+
+        }
+
+        emit EddyNativeTokenAssetWithdrawn(zrc20, amount, withdrawData);
+    }
+
     function _swap(
         address _zrc20,
         uint256 _amount,
@@ -190,60 +248,6 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
     }
 
-    function withdrawToNativeChain(
-        bytes calldata withdrawData,
-        uint256 amount,
-        address zrc20,
-        address targetZRC20
-    ) external {
-        bool isTargetZRC20BTC_ZRC20 = (targetZRC20 == BTC_ZRC20);
-        address tokenToUse = (targetZRC20 == zrc20) ? zrc20 : targetZRC20;
-        uint256 amountToUse = amount;
-
-        // check for approval
-        uint256 allowance = IZRC20(zrc20).allowance(msg.sender, address(this));
-        require(allowance > amount, "Not enough allowance of ZRC20 token");
-
-        IZRC20(zrc20).transferFrom(msg.sender, address(this), amount);
-
-        if (targetZRC20 != zrc20) {
-            // swap and update the amount
-            amountToUse = _swap(
-                zrc20,
-                amount,
-                targetZRC20,
-                0
-            );
-        }
-
-        // need to think of rounding precision errors
-        uint256 feeToCharge = ( amount * feeCharge ) / 10000 ; 
-
-        // understand how btc withdrawal works
-        if (isTargetZRC20BTC_ZRC20) {
-            bytes memory recipientAddressBech32 = bytesToBech32Bytes(withdrawData, 0);
-            (, uint256 gasFee) = IZRC20(tokenToUse).withdrawGasFee();
-            IZRC20(tokenToUse).approve(tokenToUse, gasFee);
-            if (amountToUse < gasFee) revert WrongAmount();
-            IZRC20(tokenToUse).withdraw(recipientAddressBech32, amountToUse - gasFee);
-        } else {
-            // EVM withdraw
-            bytes32 recipient = BytesHelperLib.addressToBytes(msg.sender);
-            SwapHelperLib._doWithdrawal(
-                tokenToUse,
-                feeToCharge,
-                recipient
-            );
-            SwapHelperLib._doWithdrawal(
-                tokenToUse,
-                amountToUse - feeToCharge,
-                recipient
-            );
-
-        }
-
-        emit EddyNativeTokenAssetWithdrawn(zrc20, amount, withdrawData);
-    }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                  INTERNAL HELPER FUNCTIONS                 */
