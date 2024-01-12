@@ -34,7 +34,7 @@ const config: HardhatUserConfig = {
     ...getHardhatConfigNetworks(),
     polygon_mumbai: {
       //@ts-ignore
-      accounts: [process.env.PRIVATE_KEY],
+      // accounts: [process.env.PRIVATE_KEY],
       url: "https://polygon-mumbai.g.alchemy.com/v2/CcIjayR-uykEFwpAt7sdfBM3swhISWXE",
     },
     zeta_testnet: {

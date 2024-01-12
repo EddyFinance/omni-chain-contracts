@@ -51,7 +51,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
     event EddyNativeAssetSwap(address zrc20, address targetZRC20, uint256 amount, uint256 finalOutputAmount, address evmWalletAddress, uint feeCharged, uint dollarValue);
 
     /// @dev 
-    event EddyNativeTokenAssetWithdrawn(address indexed zrc20, uint256 indexed amount, bytes indexed user);
+    event EddyNativeTokenAssetWithdrawn(address zrc20, address targetZRC20,uint256 amount, uint256 finalOutputAmount, address evmWalletAddress, uint feeCharged, uint dollarValue);
 
     /// @dev 
     event EddyRewards(address indexed zrc20, uint256 indexed currentPrice, address indexed user, uint256 amount);
@@ -174,11 +174,13 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         // emit EddyNativeTokenAssetDeposited(senderEvmAddress, amount, senderEvmAddress);
     }
 
+    // pass updateData here
     function withdrawToNativeChain(
         bytes calldata withdrawData,
         uint256 amount,
         address zrc20,
-        address targetZRC20
+        address targetZRC20,
+        bytes[] memory updateData
     ) external {
         bool isTargetZRC20BTC_ZRC20 = (targetZRC20 == BTC_ZRC20);
         address tokenToUse = (targetZRC20 == zrc20) ? zrc20 : targetZRC20;
@@ -190,11 +192,17 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
         IZRC20(zrc20).transferFrom(msg.sender, address(this), amount);
 
+        // fetch fee
+        uint256 updateFee = pythNetwork.getUpdateFee(updateData);
+        pythNetwork.updatePriceFeeds{value : updateFee}(updateData);
+        PythStructs.Price memory currentPriceStruct = pythNetwork.getPrice(addressToPriceFeed[zrc20]);
+        uint256 currentPrice = convertToUint(currentPriceStruct, IZRC20Metadata(zrc20).decimals());
+
         // need to think of rounding precision errors
         uint256 feeToCharge = ( amount * feeCharge ) / 10000 ;
 
         // transfer fees
-        IRZ20(zrc20).transfer(owner(), feeToCharge);
+        IZRC20(zrc20).transfer(owner(), feeToCharge);
 
         /// @add minimum amount quote
         if (targetZRC20 != zrc20) {
@@ -207,15 +215,14 @@ contract EddyTransferNativeAssets is zContract, Ownable {
             );
         }
 
-        // @add Eddyrewardsevent
-
         // understand how btc withdrawal works
         if (isTargetZRC20BTC_ZRC20) {
             bytes memory recipientAddressBech32 = bytesToBech32Bytes(withdrawData, 0);
             (, uint256 gasFee) = IZRC20(tokenToUse).withdrawGasFee();
             IZRC20(tokenToUse).approve(tokenToUse, gasFee);
             if (amountToUse < gasFee) revert WrongAmount();
-            IZRC20(tokenToUse).withdraw(recipientAddressBech32, amountToUse - gasFee);
+            amountToUse = amountToUse - gasFee;
+            IZRC20(tokenToUse).withdraw(recipientAddressBech32, amountToUse);
         } else {
             // EVM withdraw
             bytes32 recipient = BytesHelperLib.addressToBytes(msg.sender);
@@ -224,10 +231,12 @@ contract EddyTransferNativeAssets is zContract, Ownable {
                 amountToUse,
                 recipient
             );
+            (,uint256 gasFeeUsed) = IZRC20(targetZRC20).withdrawGasFee();
+            amountToUse = amountToUse - gasFeeUsed;
 
         }
-
-        emit EddyNativeTokenAssetWithdrawn(zrc20,targetZRC20, amount, withdrawData);
+      
+        emit EddyNativeTokenAssetWithdrawn(zrc20,targetZRC20,amount,amountToUse, msg.sender, feeToCharge,currentPrice);
     }
 
     function _swap(
