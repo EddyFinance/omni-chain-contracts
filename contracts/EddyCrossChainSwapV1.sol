@@ -24,7 +24,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @author proxima424 <https://github.com/proxima424>
 /// @author add abhishek's creds
-contract ZetaSwapV2 is zContract, Ownable {
+contract EddyCrossChainSwapV1 is zContract, Ownable {
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       CUSTOM ERRORS                        */
@@ -51,7 +51,7 @@ contract ZetaSwapV2 is zContract, Ownable {
 
     /// @dev do optimizations here
     // also have to include swap amount @ask
-    event EddySwap(address zrc20, address targetZRC20,uint256 amount, uint256 finalOutputAmount, address evmWalletAddress, uint feeCharged, uint dollarValue,bytes32 indexed recipient);
+    event EddyCrossChainSwap(address zrc20, address targetZRC20,uint256 amount, uint256 finalOutputAmount, address evmWalletAddress, uint feeCharged, uint dollarValue,bytes32 indexed recipient);
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                          STORAGE                           */
@@ -86,7 +86,6 @@ contract ZetaSwapV2 is zContract, Ownable {
         pythNetwork = IPyth(_pythNetwork);
         BTC_ZRC20 = _BTC_ZRC20;
         feeCharge = _feeCharge;
-        emit FeeChanged(0, _feeCharge);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -107,7 +106,6 @@ contract ZetaSwapV2 is zContract, Ownable {
     }
 
     /// trying something new here, emitting before state changes. 
-    /// idk why this would fail : ask 
     function setFeeCharge(uint256 _newFeeCharge) external onlyOwner {
         emit FeeChanged(feeCharge,_newFeeCharge);
         feeCharge = _newFeeCharge;     
@@ -131,6 +129,7 @@ contract ZetaSwapV2 is zContract, Ownable {
         bytes32 recipient = getRecipientOnly(message);
         address targetZRC20 = getTargetOnly(message);
         uint256 minAmt = 0;
+        address evmWalletAddress;
 
         // Fetch zrc20 token price into currentPrice
         bytes[] memory updateData;
@@ -147,6 +146,7 @@ contract ZetaSwapV2 is zContract, Ownable {
         IZRC20(zrc20).transfer(owner(), feeToCharge);
 
         uint256 outputAmount;
+        uint256 finalOutputAmount;
 
          if (targetZRC20 == BTC_ZRC20) {
             
@@ -162,6 +162,7 @@ contract ZetaSwapV2 is zContract, Ownable {
             if (outputAmount < gasFee) revert WrongAmount();
 
             IZRC20(targetZRC20).withdraw(recipientAddressBech32, outputAmount - gasFee);
+            evmWalletAddress = BytesHelperLib.bytesToAddress(context.origin, 0);
         } else {
             outputAmount = _swap(
                 zrc20,
@@ -170,9 +171,10 @@ contract ZetaSwapV2 is zContract, Ownable {
                 minAmt
             );
             SwapHelperLib._doWithdrawal(targetZRC20, outputAmount, recipient);
+            evmWalletAddress = BytesHelperLib.bytesToAddress(message, 20);
         }
         // @show changed this event
-        emit EddySwap(zrc20,targetZRC20,amount,outputAmount,senderEVMAddress,feeToCharge,currentPrice,getRecipientOnly(message));
+        emit EddyCrossChainSwap(zrc20,targetZRC20,amount,outputAmount,evmWalletAddress,feeToCharge,currentPrice,getRecipientOnly(message));
     }
 
     function _swap(
