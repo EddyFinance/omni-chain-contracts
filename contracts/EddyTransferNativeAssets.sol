@@ -78,6 +78,9 @@ contract EddyTransferNativeAssets is zContract, Ownable {
     /// @dev 
     mapping(address=>bytes32) addressToPriceFeed;
 
+    /// @dev
+    mapping(address=>uint256) addressToPrice;
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       CONSTRUCTOR                          */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -142,12 +145,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         address targetZRC20 = BytesHelperLib.bytesToAddress(message, 20);
 
         // Fetch zrc20 token price into currentPrice
-        /* bytes[] memory updateData;
-        uint256 updateFee = pythNetwork.getUpdateFee(updateData);
-        pythNetwork.updatePriceFeeds{value : updateFee}(updateData);
-        PythStructs.Price memory currentPriceStruct = pythNetwork.getPrice(addressToPriceFeed[zrc20]);
-        uint256 currentPrice = convertToUint(currentPriceStruct, IZRC20Metadata(zrc20).decimals()) */
-        uint256 currentPrice = 5*10**18;
+        uint256 currentPrice = addressToPrice[zrc20];
 
         // need to think of rounding precision errors
         uint256 feeToCharge = ( amount * feeCharge ) / 10000 ; 
@@ -170,7 +168,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         }
         // @show
         emit EddyNativeAssetSwap(zrc20,targetZRC20,amount,outputAmount,senderEvmAddress,feeToCharge,currentPrice);
-        // emit EddyNativeTokenAssetDeposited(senderEvmAddress, amount, senderEvmAddress);
+
     }
 
     // pass updateData here
@@ -191,11 +189,8 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
         IZRC20(zrc20).transferFrom(msg.sender, address(this), amount);
 
-        // fetch fee
-        uint256 updateFee = pythNetwork.getUpdateFee(updateData);
-        pythNetwork.updatePriceFeeds{value : updateFee}(updateData);
-        PythStructs.Price memory currentPriceStruct = pythNetwork.getPrice(addressToPriceFeed[zrc20]);
-        uint256 currentPrice = convertToUint(currentPriceStruct, IZRC20Metadata(zrc20).decimals());
+        // fetch price
+        uint256 currentPrice = addressToPrice[zrc20];
 
         // need to think of rounding precision errors
         uint256 feeToCharge = ( amount * feeCharge ) / 10000 ;

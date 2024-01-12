@@ -67,10 +67,14 @@ contract EddyCrossChainSwapV1 is zContract, Ownable {
     IPyth public immutable pythNetwork;
 
     /// @dev 
-    address public immutable BTC_ZRC20; //0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
+    address public immutable BTC_ZRC20; // 0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
+
+    /// @dev exponent = 2 decimals places for now
+    /// btc price = $47000 === 47000 * 10**2
+    mapping(address=>bytes32) addressToPriceFeed;
 
     /// @dev 
-    mapping(address=>bytes32) addressToPriceFeed;
+    mapping(address=>uint256) addressToPrice;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       CONSTRUCTOR                          */
@@ -86,6 +90,7 @@ contract EddyCrossChainSwapV1 is zContract, Ownable {
         pythNetwork = IPyth(_pythNetwork);
         BTC_ZRC20 = _BTC_ZRC20;
         feeCharge = _feeCharge;
+        addressToPrice[0x65a45c57636f9BcCeD4fe193A602008578BcA90b] = 47000 * 10**2 ;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -124,19 +129,14 @@ contract EddyCrossChainSwapV1 is zContract, Ownable {
         if (msg.sender != address(systemContract)) {
             revert SenderNotSystemContract(msg.sender);
         }
-
         // Extract metadata from input
         bytes32 recipient = getRecipientOnly(message);
         address targetZRC20 = getTargetOnly(message);
         uint256 minAmt = 0;
         address evmWalletAddress;
 
-        // Fetch zrc20 token price into currentPrice
-        bytes[] memory updateData;
-        uint256 updateFee = pythNetwork.getUpdateFee(updateData);
-        pythNetwork.updatePriceFeeds{value : updateFee}(updateData);
-        PythStructs.Price memory currentPriceStruct = pythNetwork.getPrice(addressToPriceFeed[zrc20]);
-        uint256 currentPrice = convertToUint(currentPriceStruct, IZRC20Metadata(zrc20).decimals());
+        // This price is fetched from Pyth's Scheduler Contract
+        uint256 currentPrice = addressToPrice[zrc20];
         // should the rewards be accounted for recipient?
 
         // need to think of rounding precision errors
@@ -196,8 +196,6 @@ contract EddyCrossChainSwapV1 is zContract, Ownable {
         
         return outputAmount;
     }
-
-    
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                  INTERNAL HELPER FUNCTIONS                 */
