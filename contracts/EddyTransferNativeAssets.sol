@@ -142,13 +142,12 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         address targetZRC20 = BytesHelperLib.bytesToAddress(message, 20);
 
         // Fetch zrc20 token price into currentPrice
-        bytes[] memory updateData;
+        /* bytes[] memory updateData;
         uint256 updateFee = pythNetwork.getUpdateFee(updateData);
         pythNetwork.updatePriceFeeds{value : updateFee}(updateData);
         PythStructs.Price memory currentPriceStruct = pythNetwork.getPrice(addressToPriceFeed[zrc20]);
-        uint256 currentPrice = convertToUint(currentPriceStruct, IZRC20Metadata(zrc20).decimals());
-        // emit EddyRewards(zrc20, currentPrice, senderEvmAddress, amount);
-        // we could also emit out the exact dollar denominated value, but can also do that offchain to save gas
+        uint256 currentPrice = convertToUint(currentPriceStruct, IZRC20Metadata(zrc20).decimals()) */
+        uint256 currentPrice = 5*10**18;
 
         // need to think of rounding precision errors
         uint256 feeToCharge = ( amount * feeCharge ) / 10000 ; 
