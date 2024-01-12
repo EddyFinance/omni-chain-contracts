@@ -48,7 +48,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @dev 
-    event EddyNativeTokenAssetDeposited(address indexed zrc20, uint256 indexed amount, address indexed user);
+    event EddyNativeAssetSwap(address zrc20, address targetZRC20, uint256 amount, uint256 finalOutputAmount, address evmWalletAddress, uint feeCharged, uint dollarValue);
 
     /// @dev 
     event EddyNativeTokenAssetWithdrawn(address indexed zrc20, uint256 indexed amount, bytes indexed user);
@@ -147,20 +147,21 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         pythNetwork.updatePriceFeeds{value : updateFee}(updateData);
         PythStructs.Price memory currentPriceStruct = pythNetwork.getPrice(addressToPriceFeed[zrc20]);
         uint256 currentPrice = convertToUint(currentPriceStruct, IZRC20Metadata(zrc20).decimals());
-        emit EddyRewards(zrc20, currentPrice, senderEvmAddress, amount);
+        // emit EddyRewards(zrc20, currentPrice, senderEvmAddress, amount);
         // we could also emit out the exact dollar denominated value, but can also do that offchain to save gas
 
         // need to think of rounding precision errors
         uint256 feeToCharge = ( amount * feeCharge ) / 10000 ; 
-        
+        uint256 outputAmount;
         // same token
         if (targetZRC20 == zrc20) {
             IZRC20(targetZRC20).transfer(owner(), feeToCharge);
             IZRC20(targetZRC20).transfer(senderEvmAddress, amount - feeToCharge);
+            outputAmount = amount - feeCharge;
         } else {
             // swap
             IZRC20(zrc20).transfer(owner(),feeToCharge);
-            uint256 outputAmount = _swap(
+            outputAmount = _swap(
                     zrc20,
                     amount - feeToCharge,
                     targetZRC20,
@@ -168,7 +169,9 @@ contract EddyTransferNativeAssets is zContract, Ownable {
             );
             IZRC20(targetZRC20).transfer(senderEvmAddress, outputAmount);
         }
-        emit EddyNativeTokenAssetDeposited(senderEvmAddress, amount, senderEvmAddress);
+        // @show
+        emit EddyNativeAssetSwap(zrc20,targetZRC20,amount,outputAmount,senderEvmAddress,feeToCharge,currentPrice);
+        // emit EddyNativeTokenAssetDeposited(senderEvmAddress, amount, senderEvmAddress);
     }
 
     function withdrawToNativeChain(
@@ -224,7 +227,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
         }
 
-        emit EddyNativeTokenAssetWithdrawn(zrc20, amount, withdrawData);
+        emit EddyNativeTokenAssetWithdrawn(zrc20,targetZRC20, amount, withdrawData);
     }
 
     function _swap(

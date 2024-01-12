@@ -46,15 +46,12 @@ contract ZetaSwapV2 is zContract, Ownable {
     /*                           EVENTS                           */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @dev 
-    event EddyRewards(address indexed zrc20, uint256 indexed currentPrice, address indexed user);
-
     /// @dev
     event FeeChanged(uint256 indexed oldBP, uint256 indexed newBP);
 
-    /// @dev
+    /// @dev do optimizations here
     // also have to include swap amount @ask
-    event EddySwap(address indexed zrc20, address indexed targetZRC20, bytes32 indexed recipient);
+    event EddySwap(address zrc20, address targetZRC20,uint256 amount, uint256 finalOutputAmount, address evmWalletAddress, uint feeCharged, uint dollarValue,bytes32 indexed recipient);
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                          STORAGE                           */
@@ -142,7 +139,6 @@ contract ZetaSwapV2 is zContract, Ownable {
         PythStructs.Price memory currentPriceStruct = pythNetwork.getPrice(addressToPriceFeed[zrc20]);
         uint256 currentPrice = convertToUint(currentPriceStruct, IZRC20Metadata(zrc20).decimals());
         // should the rewards be accounted for recipient?
-        // emit EddyRewards(zrc20, currentPrice, senderEvmAddress);
 
         // need to think of rounding precision errors
         uint256 feeToCharge = ( amount * feeCharge ) / 10000 ; 
@@ -150,10 +146,12 @@ contract ZetaSwapV2 is zContract, Ownable {
         // Send fees to owner()
         IZRC20(zrc20).transfer(owner(), feeToCharge);
 
+        uint256 outputAmount;
+
          if (targetZRC20 == BTC_ZRC20) {
             
             bytes memory recipientAddressBech32 = bytesToBech32Bytes(message, 20);
-            uint256 outputAmount = _swap(
+            outputAmount = _swap(
                 zrc20,
                 amount-feeToCharge,
                 targetZRC20,
@@ -165,7 +163,7 @@ contract ZetaSwapV2 is zContract, Ownable {
 
             IZRC20(targetZRC20).withdraw(recipientAddressBech32, outputAmount - gasFee);
         } else {
-            uint256 outputAmount = _swap(
+            outputAmount = _swap(
                 zrc20,
                 amount-feeToCharge,
                 targetZRC20,
@@ -173,7 +171,8 @@ contract ZetaSwapV2 is zContract, Ownable {
             );
             SwapHelperLib._doWithdrawal(targetZRC20, outputAmount, recipient);
         }
-        emit EddySwap(zrc20,targetZRC20,getRecipientOnly(message));
+        // @show changed this event
+        emit EddySwap(zrc20,targetZRC20,amount,outputAmount,senderEVMAddress,feeToCharge,currentPrice,getRecipientOnly(message));
     }
 
     function _swap(
