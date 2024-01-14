@@ -14,7 +14,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
     error WrongAmount();
     error NoPriceData();
 
-    event EddyNativeTokenAssetDeposited(
+    event EddyCrossChainSwap(
         address zrc20,
         address targetZRC20,
         uint256 amount,
@@ -88,11 +88,22 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
         IZRC20(zrc20).transferFrom(msg.sender, address(this), amount);
 
+
+        uint256 platformFeesForTx = (amount * platformFee) / 1000; // platformFee = 5 <> 0.5%
+
+        IZRC20(targetZRC20).transfer(owner(), platformFeesForTx);
+
+        uint256 uintPriceOfAsset = prices[zrc20];
+
+        if (uintPriceOfAsset == 0) revert NoPriceData();
+
+        uint256 dollarValueOfTrade = (amount * uintPriceOfAsset);
+
         if (targetZRC20 != zrc20) {
             // swap and update the amount
             amountToUse = _swap(
                 zrc20,
-                amount,
+                amount - platformFeesForTx,
                 targetZRC20,
                 0
             );
@@ -116,7 +127,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
             );
         }
 
-        emit EddyNativeTokenAssetWithdrawn(zrc20, amount, withdrawData);
+        emit EddyCrossChainSwap(zrc20, targetZRC20, amount, amount - platformFeesForTx, msg.sender, platformFeesForTx, dollarValueOfTrade);
     }
 
     function _swap(
@@ -175,8 +186,6 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         if (targetZRC20 == zrc20) {
             // same token
             IZRC20(targetZRC20).transfer(senderEvmAddress, amount - platformFeesForTx);
-
-            emit EddyNativeTokenAssetDeposited(zrc20, targetZRC20, amount, amount - platformFeesForTx, senderEvmAddress, platformFeesForTx, dollarValueOfTrade);
         } else {
             // swap
             uint256 outputAmount = _swap(
@@ -196,7 +205,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
             }
         }
 
-        emit EddyNativeTokenAssetDeposited(zrc20, targetZRC20, amount, amount - platformFeesForTx, senderEvmAddress, platformFeesForTx, dollarValueOfTrade);
+        emit EddyCrossChainSwap(zrc20, targetZRC20, amount, amount - platformFeesForTx, senderEvmAddress, platformFeesForTx, dollarValueOfTrade);
 
     }
 }
