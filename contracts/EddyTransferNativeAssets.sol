@@ -134,12 +134,12 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
         require(allowance > amount, "Not enough allowance of ZRC20 token");
 
-        IZRC20(zrc20).transferFrom(msg.sender, address(this), amount);
+        require(IZRC20(zrc20).transferFrom(msg.sender, address(this), amount), "INSUFFICIENT ALLOWANCE: TRANSFER FROM FAILED");
 
 
         uint256 platformFeesForTx = (amount * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
-        IZRC20(targetZRC20).transfer(owner(), platformFeesForTx);
+        require(IZRC20(targetZRC20).transfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
 
         // Hard coding prices, Would replace when using pyth 
         uint256 uintPriceOfAsset = prices[zrc20];
@@ -223,7 +223,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         uint256 platformFeesForTx = (amount * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
         // Use safe
-        IZRC20(zrc20).transfer(owner(), platformFeesForTx);
+        require(IZRC20(zrc20).transfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
 
         // Hard coding prices, Would replace when using pyth
         uint256 uintPriceOfAsset = prices[zrc20];
@@ -235,7 +235,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
         if (targetZRC20 == zrc20) {
             // same token
-            IZRC20(targetZRC20).transfer(senderEvmAddress, amount - platformFeesForTx);
+            require(IZRC20(targetZRC20).transfer(senderEvmAddress, amount - platformFeesForTx), "Failed to transfer to user wallet");
         } else {
             // swap
             uint256 outputAmount = _swap(
@@ -251,7 +251,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
                 (bool sent, ) = payable(senderEvmAddress).call{value: outputAmount}("");
                 require(sent, "Failed to transfer aZeta");
             } else {
-                IZRC20(targetZRC20).transfer(senderEvmAddress, outputAmount);
+                require(IZRC20(targetZRC20).transfer(senderEvmAddress, outputAmount), "Failed to transfer to user wallet");
             }
         }
 

@@ -8,12 +8,13 @@ import "./tasks/addLiquidity";
 import "./tasks/deployUniswapFactory";
 import "./tasks/deployUniswapRouter";
 import "./tasks/deployEddyConnector";
-import "./tasks/deployEddyPool";
 import "./tasks/deployEddyEvmConnector";
 import "./tasks/evmConnector";
 import "./tasks/btcEncodedAddress";
 import "./tasks/allowanceZRC20";
 import "./tasks/updatePrice";
+import "./tasks/deployEddyTransferNative";
+import "./tasks/updatePricesEddyTransferNative";
 
 import { getHardhatConfigNetworks } from "@zetachain/networks";
 import { HardhatUserConfig } from "hardhat/config";

@@ -1,5 +1,4 @@
 import { getAddress } from "@zetachain/protocol-contracts";
-import hre from "hardhat";
 import { task } from "hardhat/config";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 
@@ -12,17 +11,17 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
 
   const [signer] = await hre.ethers.getSigners();
 
-  const eddyCrossChainContractAbi = (
+  const eddyTransferNativeAbi = (
     await hre.artifacts.readArtifact(
-      "contracts/EddyCrossChain.sol:EddyCrossChain"
+      "contracts/EddyTransferNativeAssets.sol:EddyTransferNativeAssets"
     )
   ).abi;
 
-  const contractAddress = "0xDa11C5662C7F6CAff22f9B0A60a08584C1066520";
+  const contractAddress = "0x464B93a90A62E5dB940345080a54ca6c0cc8596e";
 
   const contract = new hre.ethers.Contract(
     contractAddress,
-    eddyCrossChainContractAbi,
+    eddyTransferNativeAbi,
     signer
   );
 
@@ -65,6 +64,7 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
   console.log(tx1.hash, tx1, "tx1 Transaction details");
   console.log(tx2.hash, tx2, "tx2 Transaction details");
   console.log(tx3.hash, tx3, "tx3 Transaction details");
+  console.log(tx5.hash, tx5, "tx5 Transaction details");
 };
 
-task("updatePrice", "Updating price for asset", main);
+task("updatePricesEddyTransferNative", "Updating price for asset", main);
