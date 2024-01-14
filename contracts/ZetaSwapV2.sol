@@ -3,20 +3,43 @@ pragma solidity 0.8.7;
 
 import "@zetachain/protocol-contracts/contracts/zevm/SystemContract.sol";
 import "@zetachain/protocol-contracts/contracts/zevm/interfaces/zContract.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@zetachain/toolkit/contracts/BytesHelperLib.sol";
 import "@zetachain/toolkit/contracts/SwapHelperLib.sol";
 
-contract ZetaSwapV2 is zContract {
+contract ZetaSwapV2 is zContract, Ownable {
     error SenderNotSystemContract();
     error WrongAmount();
+    error NoPriceData();
 
     SystemContract public immutable systemContract;
 
+    event EddyCrossChainSwap(
+        address zrc20,
+        address targetZRC20,
+        uint256 amount,
+        uint256 outputAmount,
+        address walletAddress,
+        uint256 fees,
+        uint256 dollarValueOfTrade
+    );
+
     // Testnet BTC(Zeth)
     address public immutable BTC_ZETH = 0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
+    uint256 public platformFee;
+    mapping(address => uint256) public prices;
 
-    constructor(address systemContractAddress) {
+    constructor(address systemContractAddress, uint256 _platformFee) {
         systemContract = SystemContract(systemContractAddress);
+        platformFee = _platformFee;
+    }
+
+    function updatePriceForAsset(address asset, uint256 price) external onlyOwner {
+        prices[asset] = price;
+    }
+
+    function updatePlatformFee(uint256 _updatedFee) external onlyOwner {
+        platformFee = _updatedFee;
     }
 
     function bytesToBech32Bytes(
@@ -87,14 +110,25 @@ contract ZetaSwapV2 is zContract {
             revert SenderNotSystemContract();
         }
 
+        uint256 platformFeesForTx = (amount * platformFee) / 1000; // platformFee = 5 <> 0.5%
+
+        IZRC20(zrc20).transfer(owner(), platformFeesForTx);
+
         address targetZRC20 = getTargetOnly(message);
         uint256 minAmt = 0;
 
+        uint256 uintPriceOfAsset = prices[zrc20];
+
+        if (uintPriceOfAsset == 0) revert NoPriceData();
+
+        uint256 dollarValueOfTrade = (amount * uintPriceOfAsset);
+
          if (targetZRC20 == BTC_ZETH) {
             bytes memory recipientAddressBech32 = bytesToBech32Bytes(message, 20);
+            address evmWalletAddress = BytesHelperLib.bytesToAddress(context.origin, 0);
             uint256 outputAmount = _swap(
                 zrc20,
-                amount,
+                amount - platformFeesForTx,
                 targetZRC20,
                 minAmt
             );
@@ -103,6 +137,8 @@ contract ZetaSwapV2 is zContract {
             if (outputAmount < gasFee) revert WrongAmount();
 
             IZRC20(targetZRC20).withdraw(recipientAddressBech32, outputAmount - gasFee);
+
+            emit EddyCrossChainSwap(zrc20, targetZRC20, amount, outputAmount, evmWalletAddress, platformFeesForTx, dollarValueOfTrade);
         } else {
             bytes32 recipient = getRecipientOnly(message);
             uint256 outputAmount = _swap(

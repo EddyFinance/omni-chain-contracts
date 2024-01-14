@@ -24,14 +24,11 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         uint256 dollarValueOfTrade
     );
 
-    event EddyNativeTokenAssetWithdrawn(address zrc20, uint256 amount, bytes user);
-
     SystemContract public immutable systemContract;
 
     // Testnet BTC(Zeth)
     address public immutable BTC_ZETH = 0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
     address public immutable AZETA = 0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf;
-    uint24 public constant exponent = 5;
     IWZETA public immutable WZETA;
     uint256 public platformFee;
     mapping(address => uint256) public prices;
@@ -227,7 +224,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         uint256 platformFeesForTx = (amount * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
         // Use safe
-        IZRC20(targetZRC20).transfer(owner(), platformFeesForTx);
+        IZRC20(zrc20).transfer(owner(), platformFeesForTx);
 
         uint256 uintPriceOfAsset = prices[zrc20];
 
