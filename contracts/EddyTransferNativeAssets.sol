@@ -7,6 +7,7 @@ import "@zetachain/toolkit/contracts/BytesHelperLib.sol";
 import "@zetachain/toolkit/contracts/SwapHelperLib.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol";
+import "./interfaces/IWZETA.sol";
 
 contract EddyTransferNativeAssets is zContract, Ownable {
     error SenderNotSystemContract();
@@ -19,11 +20,15 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
     // Testnet BTC(Zeth)
     address public immutable BTC_ZETH = 0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
+    address public immutable AZETA = 0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf;
+    IWZETA public immutable WZETA;
 
     constructor(
-        address systemContractAddress
+        address systemContractAddress,
+        address wrappedZetaToken
     ) {
         systemContract = SystemContract(systemContractAddress);
+        WZETA = IWZETA(wrappedZetaToken);
     }
 
     function _getRecipient(bytes calldata message) internal pure returns (bytes32 recipient) {
@@ -112,6 +117,10 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
     }
 
+    receive() external payable {}
+
+    fallback() external payable {}
+
 
     function onCrossChainCall(
         zContext calldata context,
@@ -138,7 +147,15 @@ contract EddyTransferNativeAssets is zContract, Ownable {
                     targetZRC20,
                     0
             );
-            IZRC20(targetZRC20).transfer(senderEvmAddress, outputAmount);
+            if (targetZRC20 == AZETA) {
+                // withdraw WZETA to get aZeta in 1:1 ratio
+                WZETA.withdraw(outputAmount);
+                // transfer azeta
+                (bool sent, ) = payable(senderEvmAddress).call{value: outputAmount}("");
+                require(sent, "Failed to transfer aZeta");
+            } else {
+                IZRC20(targetZRC20).transfer(senderEvmAddress, outputAmount);
+            }
         }
 
         emit EddyNativeTokenAssetDeposited(senderEvmAddress, amount, senderEvmAddress);

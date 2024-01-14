@@ -1792,6 +1792,11 @@
   resolved "https://registry.yarnpkg.com/@zetachain/protocol-contracts/-/protocol-contracts-2.1.0.tgz#775b4eee7c85d115232dece121cbfc798fde6b63"
   integrity sha512-xmG6p8DizIk0h7Tr8Lt6UMG0ejrfRrPx0qH9ze3enwblo7W+eGP12oQ7djanYu50B0pNhh9z7xy/IYxKa9wD0Q==
 
+"@zetachain/protocol-contracts@^3.0.2":
+  version "3.0.2"
+  resolved "https://registry.yarnpkg.com/@zetachain/protocol-contracts/-/protocol-contracts-3.0.2.tgz#384b73484fedd1cba130af473f92664293f3ac1e"
+  integrity sha512-5Z66o0AdOtHYWFfcgjsH9Y79bHHK/h9I+TsOwHsIiqOp/fTdGLZ2HJO/PKgjbeUsfvI2RMm/UyYYWgsX6gucBQ==
+
 "@zetachain/toolkit@^2.0.0":
   version "2.2.4"
   resolved "https://registry.yarnpkg.com/@zetachain/toolkit/-/toolkit-2.2.4.tgz#4c80d160fdac1ebe9058c4f626934056476982f7"

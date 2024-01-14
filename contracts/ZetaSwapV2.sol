@@ -73,6 +73,10 @@ contract ZetaSwapV2 is zContract {
 
     }
 
+    receive() external payable {}
+
+    fallback() external payable {}
+
     function onCrossChainCall(
         zContext calldata context,
         address zrc20,
@@ -107,6 +111,7 @@ contract ZetaSwapV2 is zContract {
                 targetZRC20,
                 minAmt
             );
+
             SwapHelperLib._doWithdrawal(targetZRC20, outputAmount, recipient);
         }
     }
