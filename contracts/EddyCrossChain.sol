@@ -112,7 +112,7 @@ contract EddyCrossChain is zContract, Ownable {
 
         uint256 platformFeesForTx = (amount * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
-        IZRC20(zrc20).transfer(owner(), platformFeesForTx);
+        require(IZRC20(zrc20).transfer(owner(), platformFeesForTx), "ZRC20 - Transfer failed to owner");
 
         address targetZRC20 = getTargetOnly(message);
         uint256 minAmt = 0;
@@ -144,7 +144,7 @@ contract EddyCrossChain is zContract, Ownable {
             address evmWalletAddress = BytesHelperLib.bytesToAddress(message, 20);
             uint256 outputAmount = _swap(
                 zrc20,
-                amount,
+                amount - platformFeesForTx,
                 targetZRC20,
                 minAmt
             );
