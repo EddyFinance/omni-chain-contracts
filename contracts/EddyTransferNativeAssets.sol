@@ -71,11 +71,62 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         return bech32Bytes;
     }
 
+    function withdrawFromZetaToConnectedChain(
+        bytes calldata withdrawData,
+        address zrc20,
+        address targetZRC20
+    ) external payable {
+        // Store fee in aZeta
+        uint256 platformFeesForTx = (msg.value * platformFee) / 1000; // platformFee = 5 <> 0.5%
+
+        (bool sent, ) = payable(owner()).call{value: platformFeesForTx}("");
+
+        require(sent, "Failed to transfer aZeta to owner");
+
+        WZETA.deposit{value: msg.value - platformFeesForTx}();
+
+        bool isTargetZRC20BTC_ZETH = targetZRC20 == BTC_ZETH;
+
+        uint256 uintPriceOfAsset = prices[targetZRC20];
+
+        if (uintPriceOfAsset == 0) revert NoPriceData();
+
+        uint256 dollarValueOfTrade = (msg.value * uintPriceOfAsset);
+
+        uint256 outputAmount = _swap(
+            zrc20,
+            msg.value - platformFeesForTx,
+            targetZRC20,
+            0
+        );
+
+        if (isTargetZRC20BTC_ZETH) {
+            bytes memory recipientAddressBech32 = bytesToBech32Bytes(withdrawData, 0);
+            (, uint256 gasFee) = IZRC20(targetZRC20).withdrawGasFee();
+            IZRC20(targetZRC20).approve(targetZRC20, gasFee);
+            if (outputAmount < gasFee) revert WrongAmount();
+
+            IZRC20(targetZRC20).withdraw(recipientAddressBech32, outputAmount - gasFee);
+        } else {
+            // EVM withdraw
+            bytes32 recipient = BytesHelperLib.addressToBytes(msg.sender);
+
+            SwapHelperLib._doWithdrawal(
+                targetZRC20,
+                outputAmount,
+                recipient
+            );
+        }
+
+        emit EddyCrossChainSwap(zrc20, targetZRC20, msg.value, msg.value - platformFeesForTx, msg.sender, platformFeesForTx, dollarValueOfTrade);
+
+    }
+
     function withdrawToNativeChain(
-    bytes calldata withdrawData,
-    uint256 amount,
-    address zrc20,
-    address targetZRC20
+        bytes calldata withdrawData,
+        uint256 amount,
+        address zrc20,
+        address targetZRC20
     ) external {
         bool isTargetZRC20BTC_ZETH = targetZRC20 == BTC_ZETH;
         address tokenToUse = (targetZRC20 == zrc20) ? zrc20 : targetZRC20;
@@ -92,6 +143,8 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         uint256 platformFeesForTx = (amount * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
         IZRC20(targetZRC20).transfer(owner(), platformFeesForTx);
+
+        // Hard coding prices, Would replace when using pyth 
 
         uint256 uintPriceOfAsset = prices[zrc20];
 
