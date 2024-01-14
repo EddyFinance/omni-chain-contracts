@@ -70,7 +70,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
     function withdrawFromZetaToConnectedChain(
         bytes calldata withdrawData,
-        address zrc20,
+        address zrc20, // Pass WZETA address here
         address targetZRC20
     ) external payable {
         // Store fee in aZeta
@@ -142,7 +142,6 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         IZRC20(targetZRC20).transfer(owner(), platformFeesForTx);
 
         // Hard coding prices, Would replace when using pyth 
-
         uint256 uintPriceOfAsset = prices[zrc20];
 
         if (uintPriceOfAsset == 0) revert NoPriceData();
@@ -177,7 +176,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
             );
         }
 
-        emit EddyCrossChainSwap(zrc20, targetZRC20, amount, amount - platformFeesForTx, msg.sender, platformFeesForTx, dollarValueOfTrade);
+        emit EddyCrossChainSwap(zrc20, targetZRC20, amount, amountToUse, msg.sender, platformFeesForTx, dollarValueOfTrade);
     }
 
     function _swap(
@@ -226,6 +225,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         // Use safe
         IZRC20(zrc20).transfer(owner(), platformFeesForTx);
 
+        // Hard coding prices, Would replace when using pyth
         uint256 uintPriceOfAsset = prices[zrc20];
 
         if (uintPriceOfAsset == 0) revert NoPriceData();
@@ -239,10 +239,10 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         } else {
             // swap
             uint256 outputAmount = _swap(
-                    zrc20,
-                    amount - platformFeesForTx,
-                    targetZRC20,
-                    0
+                zrc20,
+                amount - platformFeesForTx,
+                targetZRC20,
+                0
             );
             if (targetZRC20 == AZETA) {
                 // withdraw WZETA to get aZeta in 1:1 ratio

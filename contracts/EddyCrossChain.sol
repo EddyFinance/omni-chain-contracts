@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@zetachain/toolkit/contracts/BytesHelperLib.sol";
 import "@zetachain/toolkit/contracts/SwapHelperLib.sol";
 
-contract ZetaSwapV2 is zContract, Ownable {
+contract EddyCrossChain is zContract, Ownable {
     error SenderNotSystemContract();
     error WrongAmount();
     error NoPriceData();
