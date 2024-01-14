@@ -141,6 +141,7 @@ contract ZetaSwapV2 is zContract, Ownable {
             emit EddyCrossChainSwap(zrc20, targetZRC20, amount, outputAmount, evmWalletAddress, platformFeesForTx, dollarValueOfTrade);
         } else {
             bytes32 recipient = getRecipientOnly(message);
+            address evmWalletAddress = BytesHelperLib.bytesToAddress(message, 20);
             uint256 outputAmount = _swap(
                 zrc20,
                 amount,
@@ -149,6 +150,7 @@ contract ZetaSwapV2 is zContract, Ownable {
             );
 
             SwapHelperLib._doWithdrawal(targetZRC20, outputAmount, recipient);
+            emit EddyCrossChainSwap(zrc20, targetZRC20, amount, outputAmount, evmWalletAddress, platformFeesForTx, dollarValueOfTrade);
         }
     }
 }
