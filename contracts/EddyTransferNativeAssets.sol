@@ -12,8 +12,18 @@ import "./interfaces/IWZETA.sol";
 contract EddyTransferNativeAssets is zContract, Ownable {
     error SenderNotSystemContract();
     error WrongAmount();
+    error NoPriceData();
 
-    event EddyNativeTokenAssetDeposited(address zrc20, uint256 amount, address user);
+    event EddyNativeTokenAssetDeposited(
+        address zrc20,
+        address targetZRC20,
+        uint256 amount,
+        uint256 outputAmount,
+        address walletAddress,
+        uint256 fees,
+        uint256 dollarValueOfTrade
+    );
+
     event EddyNativeTokenAssetWithdrawn(address zrc20, uint256 amount, bytes user);
 
     SystemContract public immutable systemContract;
@@ -21,19 +31,32 @@ contract EddyTransferNativeAssets is zContract, Ownable {
     // Testnet BTC(Zeth)
     address public immutable BTC_ZETH = 0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
     address public immutable AZETA = 0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf;
+    uint24 public constant exponent = 5;
     IWZETA public immutable WZETA;
+    uint256 public platformFee;
+    mapping(address => uint256) public prices;
 
     constructor(
         address systemContractAddress,
-        address wrappedZetaToken
+        address wrappedZetaToken,
+        uint256 _platformFee
     ) {
         systemContract = SystemContract(systemContractAddress);
         WZETA = IWZETA(wrappedZetaToken);
+        platformFee = _platformFee;
     }
 
     function _getRecipient(bytes calldata message) internal pure returns (bytes32 recipient) {
         address recipientAddr = BytesHelperLib.bytesToAddress(message, 0);
         recipient = BytesHelperLib.addressToBytes(recipientAddr);
+    }
+
+    function updatePriceForAsset(address asset, uint256 price) external onlyOwner {
+        prices[asset] = price;
+    }
+
+    function updatePlatformFee(uint256 _updatedFee) external onlyOwner {
+        platformFee = _updatedFee;
     }
 
     function bytesToBech32Bytes(
@@ -136,14 +159,29 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
         address targetZRC20 = BytesHelperLib.bytesToAddress(message, 20);
 
+        // Fee for platform
+        uint256 platformFeesForTx = (amount * platformFee) / 1000; // platformFee = 5 <> 0.5%
+
+        // Use safe
+        IZRC20(targetZRC20).transfer(owner(), platformFeesForTx);
+
+        uint256 uintPriceOfAsset = prices[zrc20];
+
+        if (uintPriceOfAsset == 0) revert NoPriceData();
+
+        uint256 dollarValueOfTrade = (amount * uintPriceOfAsset);
+
+
         if (targetZRC20 == zrc20) {
             // same token
-            IZRC20(targetZRC20).transfer(senderEvmAddress, amount);
+            IZRC20(targetZRC20).transfer(senderEvmAddress, amount - platformFeesForTx);
+
+            emit EddyNativeTokenAssetDeposited(zrc20, targetZRC20, amount, amount - platformFeesForTx, senderEvmAddress, platformFeesForTx, dollarValueOfTrade);
         } else {
             // swap
             uint256 outputAmount = _swap(
                     zrc20,
-                    amount,
+                    amount - platformFeesForTx,
                     targetZRC20,
                     0
             );
@@ -158,7 +196,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
             }
         }
 
-        emit EddyNativeTokenAssetDeposited(senderEvmAddress, amount, senderEvmAddress);
+        emit EddyNativeTokenAssetDeposited(zrc20, targetZRC20, amount, amount - platformFeesForTx, senderEvmAddress, platformFeesForTx, dollarValueOfTrade);
 
     }
 }
