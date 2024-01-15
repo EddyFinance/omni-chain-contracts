@@ -68,7 +68,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         return bech32Bytes;
     }
 
-    function withdrawFromZetaToConnectedChain(
+    function transferZetaToConnectedChain(
         bytes calldata withdrawData,
         address zrc20, // Pass WZETA address here
         address targetZRC20

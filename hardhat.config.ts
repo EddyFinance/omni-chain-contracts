@@ -15,6 +15,7 @@ import "./tasks/allowanceZRC20";
 import "./tasks/updatePrice";
 import "./tasks/deployEddyTransferNative";
 import "./tasks/updatePricesEddyTransferNative";
+import "./tasks/testWithdraw";
 
 import { getHardhatConfigNetworks } from "@zetachain/networks";
 import { HardhatUserConfig } from "hardhat/config";
