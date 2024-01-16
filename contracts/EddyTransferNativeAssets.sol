@@ -139,7 +139,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
         uint256 platformFeesForTx = (amount * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
-        require(IZRC20(targetZRC20).transfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
+        require(IZRC20(zrc20).transfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
 
         // Hard coding prices, Would replace when using pyth 
         uint256 uintPriceOfAsset = prices[zrc20];
