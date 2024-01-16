@@ -171,7 +171,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
             SwapHelperLib._doWithdrawal(
                 tokenToUse,
-                amountToUse,
+                amountToUse - platformFeesForTx,
                 recipient
             );
         }

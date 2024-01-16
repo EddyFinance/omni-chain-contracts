@@ -17,7 +17,7 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
     )
   ).abi;
 
-  const contractAddress = "0x6E59823bB6A980feE87Ab8d9305966d56788023a";
+  const contractAddress = "0xc019f7DD9Fc97800BA34c584783f1EAa3705BCcb";
 
   const contract = new hre.ethers.Contract(
     contractAddress,
