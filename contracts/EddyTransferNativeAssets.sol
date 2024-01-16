@@ -84,7 +84,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
         bool isTargetZRC20BTC_ZETH = targetZRC20 == BTC_ZETH;
 
-        uint256 uintPriceOfAsset = prices[targetZRC20];
+        uint256 uintPriceOfAsset = prices[zrc20];
 
         if (uintPriceOfAsset == 0) revert NoPriceData();
 
