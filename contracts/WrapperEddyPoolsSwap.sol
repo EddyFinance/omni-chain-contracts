@@ -317,11 +317,20 @@ contract WrapperEddyPoolsSwap is Ownable {
         uint amountETHMin
     ) external {
         require(liquidity > 0, "ZERO_AMOUNT_TRANSACTION");
-        require(IERC20(token).allowance(msg.sender, address(this)) > liquidity, "INSUFFICIENT ALLOWANCE FOR LP_TOKEN REMOVAL");
 
-        require(IERC20(token).transferFrom(msg.sender, address(this), liquidity), "TRANSFER FROM FAILED eddyRemoveLiquidityEth");
+        // LP address
+        address pairAddress = uniswapv2PairFor(
+            systemContract.uniswapv2FactoryAddress(),
+            token,
+            WZETA
+        );
 
-        IERC20(token).approve(address(systemContract.uniswapv2Router02Address()), liquidity);
+        require(IERC20(pairAddress).allowance(msg.sender, address(this)) > liquidity, "INSUFFICIENT ALLOWANCE FOR LP_TOKEN REMOVAL");
+
+        require(IERC20(pairAddress).transferFrom(msg.sender, address(this), liquidity), "TRANSFER FROM FAILED eddyRemoveLiquidityEth");
+
+        
+        IERC20(pairAddress).approve(address(systemContract.uniswapv2Router02Address()), liquidity);
 
         (uint amountToken, uint amountETH) = IUniswapV2Router01(
             systemContract.uniswapv2Router02Address()
