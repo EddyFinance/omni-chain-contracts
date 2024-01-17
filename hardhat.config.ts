@@ -16,6 +16,8 @@ import "./tasks/updatePrice";
 import "./tasks/deployEddyTransferNative";
 import "./tasks/updatePricesEddyTransferNative";
 import "./tasks/testWithdraw";
+import "./tasks/deployWrapper";
+import "./tasks/updatePricesWrapper";
 
 import { getHardhatConfigNetworks } from "@zetachain/networks";
 import { HardhatUserConfig } from "hardhat/config";
@@ -31,7 +33,7 @@ const config: HardhatUserConfig = {
     hardhat: {
       chainId: 7001,
       forking: {
-        url: "https://zetachain-athens-evm.blockpi.network/v1/rpc/public",
+        url: "https://rpc.ankr.com/zetachain_evm_athens_testnet",
       },
     },
     ...getHardhatConfigNetworks(),
@@ -42,7 +44,7 @@ const config: HardhatUserConfig = {
     },
     zeta_testnet: {
       ...getHardhatConfigNetworks().zeta_testnet,
-      url: "https://zetachain-athens-evm.blockpi.network/v1/rpc/public",
+      url: "https://rpc.ankr.com/zetachain_evm_athens_testnet",
     },
   },
   solidity: {

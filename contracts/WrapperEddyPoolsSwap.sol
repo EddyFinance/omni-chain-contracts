@@ -56,6 +56,45 @@ contract WrapperEddyPoolsSwap is Ownable {
         platformFee = _platformFee;
     }
 
+        error CantBeIdenticalAddresses();
+
+    error CantBeZeroAddress();
+
+    // returns sorted token addresses, used to handle return values from pairs sorted in this order
+    function sortTokens(
+        address tokenA,
+        address tokenB
+    ) internal pure returns (address token0, address token1) {
+        if (tokenA == tokenB) revert CantBeIdenticalAddresses();
+        (token0, token1) = tokenA < tokenB
+            ? (tokenA, tokenB)
+            : (tokenB, tokenA);
+        if (token0 == address(0)) revert CantBeZeroAddress();
+    }
+
+    // calculates the CREATE2 address for a pair without making any external calls
+    function uniswapv2PairFor(
+        address factory,
+        address tokenA,
+        address tokenB
+    ) public pure returns (address pair) {
+        (address token0, address token1) = sortTokens(tokenA, tokenB);
+        pair = address(
+            uint160(
+                uint256(
+                    keccak256(
+                        abi.encodePacked(
+                            hex"ff",
+                            factory,
+                            keccak256(abi.encodePacked(token0, token1)),
+                            hex"96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f" // init code hash
+                        )
+                    )
+                )
+            )
+        );
+    }
+
     function swapEddyTokensForTokens(
         uint amountIn,
         uint amountOutMin,
@@ -204,6 +243,10 @@ contract WrapperEddyPoolsSwap is Ownable {
 
     }
 
+    receive() external payable {}
+
+    fallback() external payable {}
+
     function eddyAddLiquidityEth(
         address token,
         uint amountTokenDesired,
@@ -212,15 +255,11 @@ contract WrapperEddyPoolsSwap is Ownable {
     ) external payable {
         require(msg.value > 0, "ZERO_AMOUNT_TRANSACTION");
 
-        uint256 platformFeesForTx = (msg.value * platformFee) / 1000; // platformFee = 5 <> 0.5%
-
         require(IZRC20(token).allowance(msg.sender, address(this)) > amountTokenDesired, "INSUFFICIENT ALLOWANCE FOR TOKEN_IN");
 
         require(IZRC20(token).transferFrom(msg.sender, address(this), amountTokenDesired), "TRANSFER FROM FAILED eddyAddLiquidityEth");
 
-        require(IZRC20(token).transfer(owner(), platformFeesForTx), "FAILED TO TRANSFER FEES TO OWNER()");
-
-        IZRC20(token).approve(address(systemContract.uniswapv2Router02Address()), amountTokenDesired - platformFeesForTx);
+        IZRC20(token).approve(address(systemContract.uniswapv2Router02Address()), amountTokenDesired);
 
 
         uint256 uintPriceOfAssetA = prices[token];
@@ -235,16 +274,30 @@ contract WrapperEddyPoolsSwap is Ownable {
             systemContract.uniswapv2Router02Address()
         ).addLiquidityETH{ value: msg.value }(
             token,
-            amountTokenDesired - platformFeesForTx,
+            amountTokenDesired,
             0,
             0,
-            msg.sender,
+            address(this),
             block.timestamp + MAX_DEADLINE
         );
 
-        (bool sentRemainingEth, ) = payable(msg.sender).call{value: msg.value - platformFeesForTx - amountETH}("");
+        // Token minted in the contract
+        address pairAddress = uniswapv2PairFor(
+            systemContract.uniswapv2FactoryAddress(),
+            token,
+            WZETA
+        );
 
-        require(sentRemainingEth, "Failed to send back users ETH");
+        uint256 platformFeesForTx = (liquidity * platformFee) / 1000; // platformFee = 5 <> 0.5%
+
+        require(IERC20(pairAddress).transfer(owner(), platformFeesForTx), "FAILED TO TRANSFER FEES TO OWNER()");
+
+        require(IERC20(pairAddress).transfer(msg.sender, liquidity - platformFeesForTx), "FAILED TO TRANSFER FEES TO OWNER()");
+
+        // Transfer any remaining eth to user
+        (bool sent, ) = payable(msg.sender).call{ value: msg.value - amountETH }("");
+
+        require(sent, "FAILED TO TRANSFER REMAINING ETH TO USER");
 
         emit EddyLiquidityAdded(
             token,
