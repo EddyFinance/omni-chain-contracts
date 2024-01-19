@@ -17,6 +17,7 @@ contract WrapperEddyPoolsSwap is Ownable {
     SystemContract public immutable systemContract;
 
     event EddyLiquidityAdded(
+        address walletAddress,
         address tokenA,
         address tokenB,
         uint256 amountA,
@@ -27,6 +28,7 @@ contract WrapperEddyPoolsSwap is Ownable {
     );
 
     event EddyLiquidityRemoved(
+        address walletAddress,
         address tokenA,
         address tokenB,
         uint256 liquidity,
@@ -37,6 +39,7 @@ contract WrapperEddyPoolsSwap is Ownable {
     );
 
     event EddySwap(
+        address walletAddress,
         address tokenIn,
         address tokenOut,
         uint256 amountIn,
@@ -135,6 +138,7 @@ contract WrapperEddyPoolsSwap is Ownable {
         );
 
         emit EddySwap(
+            msg.sender,
             tokenIn,
             tokenOut,
             amountIn,
@@ -180,10 +184,11 @@ contract WrapperEddyPoolsSwap is Ownable {
         require(IZRC20(tokenOut).transfer(msg.sender, amountOut - platformFeesForTx), "TRANSFER OF ZRC20 FAILED TO USER");
 
         emit EddySwap(
+            msg.sender,
             tokenIn,
             tokenOut,
             msg.value,
-            amounts[path.length - 1],
+            amountOut,
             platformFeesForTx,
             dollarValueOfTrade
         );
@@ -231,6 +236,7 @@ contract WrapperEddyPoolsSwap is Ownable {
         );
 
         emit EddySwap(
+            msg.sender,
             tokenIn,
             tokenOut,
             amountIn,
@@ -300,6 +306,7 @@ contract WrapperEddyPoolsSwap is Ownable {
         require(sent, "FAILED TO TRANSFER REMAINING ETH TO USER");
 
         emit EddyLiquidityAdded(
+            msg.sender,
             token,
             WZETA,
             amountToken,
@@ -362,6 +369,7 @@ contract WrapperEddyPoolsSwap is Ownable {
         uint256 dollarValueOfTrade = (amountToken * uintPriceOfAssetA) + (amountETH + uintPriceOfAssetB);
 
         emit EddyLiquidityRemoved(
+            msg.sender,
             token,
             WZETA,
             liquidity,
