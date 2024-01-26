@@ -136,7 +136,7 @@ contract EddyCrossChain is zContract, Ownable {
         // First 20 bytes is target
         address targetZRC20 = getTargetOnly(message);
 
-        uint256 minAmt = (amount - platformFeesForTx) - (5 * (amount - platformFeesForTx)) / 1000; // Set manual slippage of 0.5% initially
+        uint256 minAmt = (amount - platformFeesForTx) - (5 * (amount - platformFeesForTx) / 1000); // Set manual slippage of 0.5% initially
 
         (int64 priceUint, int32 expo) = getPriceOfToken(zrc20);
 

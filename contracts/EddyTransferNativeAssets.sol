@@ -5,6 +5,8 @@ import "@zetachain/protocol-contracts/contracts/zevm/SystemContract.sol";
 import "@zetachain/protocol-contracts/contracts/zevm/interfaces/zContract.sol";
 import "@zetachain/toolkit/contracts/BytesHelperLib.sol";
 import "@zetachain/toolkit/contracts/SwapHelperLib.sol";
+import "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
+import "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol";
 import "./interfaces/IWZETA.sol";
@@ -14,6 +16,8 @@ contract EddyTransferNativeAssets is zContract, Ownable {
     error WrongAmount();
     error NoPriceData();
 
+    IPyth pyth;
+
     event EddyCrossChainSwap(
         address zrc20,
         address targetZRC20,
@@ -21,25 +25,31 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         uint256 outputAmount,
         address walletAddress,
         uint256 fees,
-        uint256 dollarValueOfTrade
+        int64 priceUint,
+        int32 expo
     );
 
     SystemContract public immutable systemContract;
 
     // Testnet BTC(Zeth)
-    address public immutable BTC_ZETH = 0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
-    address public immutable AZETA = 0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf;
+    address public constant BTC_ZETH = 0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
+    address public constant AZETA = 0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf;
     IWZETA public immutable WZETA;
     uint256 public platformFee;
-    mapping(address => uint256) public prices;
+
+    mapping(address => int64) public prices;
+
+    mapping(address => bytes32) public addressToTokenId;
 
     constructor(
         address systemContractAddress,
         address wrappedZetaToken,
+        address _pythContractAddress,
         uint256 _platformFee
     ) {
         systemContract = SystemContract(systemContractAddress);
         WZETA = IWZETA(wrappedZetaToken);
+        pyth = IPyth(_pythContractAddress);
         platformFee = _platformFee;
     }
 
@@ -48,7 +58,17 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         recipient = BytesHelperLib.addressToBytes(recipientAddr);
     }
 
-    function updatePriceForAsset(address asset, uint256 price) external onlyOwner {
+    function updateAddressToTokenId(bytes32 tokenId, address asset) external onlyOwner {
+        addressToTokenId[asset] = tokenId;
+    }
+
+    function getPriceOfToken(address token) internal view returns(int64 priceUint, int32 expo) {
+        PythStructs.Price memory priceData = pyth.getPrice(addressToTokenId[token]);
+        priceUint = priceData.price;
+        expo = priceData.expo;
+    }
+
+    function updatePriceForAsset(address asset, int64 price) external onlyOwner {
         prices[asset] = price;
     }
 
@@ -71,7 +91,8 @@ contract EddyTransferNativeAssets is zContract, Ownable {
     function transferZetaToConnectedChain(
         bytes calldata withdrawData,
         address zrc20, // Pass WZETA address here
-        address targetZRC20
+        address targetZRC20,
+        uint256 minAmount
     ) external payable {
         // Store fee in aZeta
         uint256 platformFeesForTx = (msg.value * platformFee) / 1000; // platformFee = 5 <> 0.5%
@@ -84,17 +105,17 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
         bool isTargetZRC20BTC_ZETH = targetZRC20 == BTC_ZETH;
 
-        uint256 uintPriceOfAsset = prices[zrc20];
 
-        if (uintPriceOfAsset == 0) revert NoPriceData();
+        // Hardcoding Zeta price, update when token launched
+        int64 priceUint = prices[AZETA];
 
-        uint256 dollarValueOfTrade = (msg.value * uintPriceOfAsset);
+        if (priceUint == 0) revert NoPriceData();
 
         uint256 outputAmount = _swap(
             zrc20,
             msg.value - platformFeesForTx,
             targetZRC20,
-            0
+            minAmount
         );
 
         if (isTargetZRC20BTC_ZETH) {
@@ -115,7 +136,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
             );
         }
 
-        emit EddyCrossChainSwap(zrc20, targetZRC20, msg.value, msg.value - platformFeesForTx, msg.sender, platformFeesForTx, dollarValueOfTrade);
+        emit EddyCrossChainSwap(zrc20, targetZRC20, msg.value, msg.value - platformFeesForTx, msg.sender, platformFeesForTx, priceUint, 0);
 
     }
 
@@ -123,7 +144,8 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         bytes calldata withdrawData,
         uint256 amount,
         address zrc20,
-        address targetZRC20
+        address targetZRC20,
+        uint256 minAmount
     ) external {
         bool isTargetZRC20BTC_ZETH = targetZRC20 == BTC_ZETH;
         address tokenToUse = (targetZRC20 == zrc20) ? zrc20 : targetZRC20;
@@ -142,11 +164,10 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         require(IZRC20(zrc20).transfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
 
         // Hard coding prices, Would replace when using pyth 
-        uint256 uintPriceOfAsset = prices[zrc20];
+        (int64 priceUint, int32 expo) = getPriceOfToken(zrc20);
 
-        if (uintPriceOfAsset == 0) revert NoPriceData();
+        if (priceUint == 0) revert NoPriceData();
 
-        uint256 dollarValueOfTrade = (amount * uintPriceOfAsset);
 
         if (targetZRC20 != zrc20) {
             // swap and update the amount
@@ -154,7 +175,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
                 zrc20,
                 amount - platformFeesForTx,
                 targetZRC20,
-                0
+                minAmount
             );
         }
 
@@ -176,7 +197,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
             );
         }
 
-        emit EddyCrossChainSwap(zrc20, targetZRC20, amount, amountToUse, msg.sender, platformFeesForTx, dollarValueOfTrade);
+        emit EddyCrossChainSwap(zrc20, targetZRC20, amount, amountToUse, msg.sender, platformFeesForTx, priceUint, expo);
     }
 
     function _swap(
@@ -225,24 +246,30 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         // Use safe
         require(IZRC20(zrc20).transfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
 
-        // Hard coding prices, Would replace when using pyth
-        uint256 uintPriceOfAsset = prices[zrc20];
+        int64 priceUint;
+        int32 expo;
 
-        if (uintPriceOfAsset == 0) revert NoPriceData();
+        if (targetZRC20 == AZETA) {
+            priceUint = prices[AZETA];
+            expo = 0;
+        } else {
+            (priceUint, expo) = getPriceOfToken(zrc20);
+        }
 
-        uint256 dollarValueOfTrade = (amount * uintPriceOfAsset);
+        if (priceUint == 0) revert NoPriceData();
 
 
         if (targetZRC20 == zrc20) {
             // same token
             require(IZRC20(targetZRC20).transfer(senderEvmAddress, amount - platformFeesForTx), "Failed to transfer to user wallet");
         } else {
+            uint256 minAmt = (amount - platformFeesForTx) - (5 * (amount - platformFeesForTx) / 1000); // Set manual slippage of 0.5% initially
             // swap
             uint256 outputAmount = _swap(
                 zrc20,
                 amount - platformFeesForTx,
                 targetZRC20,
-                0
+                minAmt
             );
             if (targetZRC20 == AZETA) {
                 // withdraw WZETA to get aZeta in 1:1 ratio
@@ -255,7 +282,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
             }
         }
 
-        emit EddyCrossChainSwap(zrc20, targetZRC20, amount, amount - platformFeesForTx, senderEvmAddress, platformFeesForTx, dollarValueOfTrade);
+        emit EddyCrossChainSwap(zrc20, targetZRC20, amount, amount - platformFeesForTx, senderEvmAddress, platformFeesForTx, priceUint, expo);
 
     }
 }
