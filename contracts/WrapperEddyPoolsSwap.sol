@@ -5,6 +5,8 @@ import "@zetachain/protocol-contracts/contracts/zevm/SystemContract.sol";
 import "@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router01.sol";
+import "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
+import "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -13,6 +15,8 @@ contract WrapperEddyPoolsSwap is Ownable {
 
     uint16 internal constant MAX_DEADLINE = 200;
     address public immutable WZETA = 0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf;
+
+    IPyth pyth;
 
     SystemContract public immutable systemContract;
 
@@ -51,17 +55,31 @@ contract WrapperEddyPoolsSwap is Ownable {
     uint256 public platformFee;
     mapping(address => uint256) public prices;
 
+    mapping(address => bytes32) public addressToTokenId;
+
     constructor(
         address systemContractAddress,
+        address _pythContractAddress,
         uint256 _platformFee
     ) {
         systemContract = SystemContract(systemContractAddress);
+        pyth = IPyth(_pythContractAddress);
         platformFee = _platformFee;
     }
 
-        error CantBeIdenticalAddresses();
+    error CantBeIdenticalAddresses();
 
     error CantBeZeroAddress();
+
+    function updateAddressToTokenId(bytes32 tokenId, address asset) external onlyOwner {
+        addressToTokenId[asset] = tokenId;
+    }
+
+    function getPriceOfToken(address token) external view returns(int64 priceUint, int32 expo) {
+        PythStructs.Price memory priceData = pyth.getPrice(addressToTokenId[token]);
+        priceUint = priceData.price;
+        expo = priceData.expo;
+    }
 
     // returns sorted token addresses, used to handle return values from pairs sorted in this order
     function sortTokens(
