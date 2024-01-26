@@ -31,16 +31,24 @@ contract EddyCrossChain is zContract, Ownable {
 
     // Testnet BTC(Zeth)
     address public constant BTC_ZETH = 0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
+
     uint256 public platformFee;
+    uint256 public slippage;
 
     mapping(address => int64) public prices;
 
     mapping(address => bytes32) public addressToTokenId;
 
-    constructor(address systemContractAddress, address _pythContractAddress, uint256 _platformFee) {
+    constructor(
+        address systemContractAddress,
+        address _pythContractAddress,
+        uint256 _platformFee,
+        uint256 _slippage
+    ) {
         systemContract = SystemContract(systemContractAddress);
         pyth = IPyth(_pythContractAddress);
         platformFee = _platformFee;
+        slippage = _slippage;
     }
 
     function updateAddressToTokenId(bytes32 tokenId, address asset) external onlyOwner {
@@ -59,6 +67,10 @@ contract EddyCrossChain is zContract, Ownable {
 
     function updatePlatformFee(uint256 _updatedFee) external onlyOwner {
         platformFee = _updatedFee;
+    }
+
+    function updateSlippage(uint256 _slippage) external onlyOwner {
+        slippage = _slippage;
     }
 
     function bytesToBech32Bytes(
@@ -136,7 +148,7 @@ contract EddyCrossChain is zContract, Ownable {
         // First 20 bytes is target
         address targetZRC20 = getTargetOnly(message);
 
-        uint256 minAmt = (amount - platformFeesForTx) - (5 * (amount - platformFeesForTx) / 1000); // Set manual slippage of 0.5% initially
+        uint256 minAmt = (amount - platformFeesForTx) - (slippage * (amount - platformFeesForTx) / 1000);
 
         (int64 priceUint, int32 expo) = getPriceOfToken(zrc20);
 

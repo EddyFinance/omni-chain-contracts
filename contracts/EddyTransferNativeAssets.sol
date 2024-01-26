@@ -35,7 +35,9 @@ contract EddyTransferNativeAssets is zContract, Ownable {
     address public constant BTC_ZETH = 0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
     address public constant AZETA = 0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf;
     IWZETA public immutable WZETA;
+
     uint256 public platformFee;
+    uint256 public slippage;
 
     mapping(address => int64) public prices;
 
@@ -45,12 +47,14 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         address systemContractAddress,
         address wrappedZetaToken,
         address _pythContractAddress,
-        uint256 _platformFee
+        uint256 _platformFee,
+        uint256 _slippage
     ) {
         systemContract = SystemContract(systemContractAddress);
         WZETA = IWZETA(wrappedZetaToken);
         pyth = IPyth(_pythContractAddress);
         platformFee = _platformFee;
+        slippage = _slippage;
     }
 
     function _getRecipient(bytes calldata message) internal pure returns (bytes32 recipient) {
@@ -111,6 +115,8 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
         if (priceUint == 0) revert NoPriceData();
 
+        minAmount = (msg.value - platformFeesForTx) - (slippage * (msg.value - platformFeesForTx) / 1000);
+
         uint256 outputAmount = _swap(
             zrc20,
             msg.value - platformFeesForTx,
@@ -168,6 +174,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
         if (priceUint == 0) revert NoPriceData();
 
+        minAmount = (amount - platformFeesForTx) - (slippage * (amount - platformFeesForTx) / 1000);
 
         if (targetZRC20 != zrc20) {
             // swap and update the amount
@@ -263,7 +270,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
             // same token
             require(IZRC20(targetZRC20).transfer(senderEvmAddress, amount - platformFeesForTx), "Failed to transfer to user wallet");
         } else {
-            uint256 minAmt = (amount - platformFeesForTx) - (5 * (amount - platformFeesForTx) / 1000); // Set manual slippage of 0.5% initially
+            uint256 minAmt = (amount - platformFeesForTx) - (slippage * (amount - platformFeesForTx) / 1000); // Set manual slippage of 0.5% initially
             // swap
             uint256 outputAmount = _swap(
                 zrc20,
