@@ -28,7 +28,10 @@ contract WrapperEddyPoolsSwap is Ownable {
         uint256 amountB,
         uint256 liquidity,
         uint256 fees,
-        uint256 dollarValueOfTrade
+        int64 priceUintA,
+        int32 expoA,
+        int64 priceUintB,
+        int32 expoB
     );
 
     event EddyLiquidityRemoved(
@@ -39,7 +42,10 @@ contract WrapperEddyPoolsSwap is Ownable {
         uint256 amountA,
         uint256 amountB,
         uint256 fees,
-        uint256 dollarValueOfTrade
+        int64 priceUintA,
+        int32 expoA,
+        int64 priceUintB,
+        int32 expoB
     );
 
     event EddySwap(
@@ -49,11 +55,12 @@ contract WrapperEddyPoolsSwap is Ownable {
         uint256 amountIn,
         uint256 amountOut,
         uint256 fees,
-        uint256 dollarValueOfTrade
+        int64 priceUint,
+        int32 expo
     );
 
     uint256 public platformFee;
-    mapping(address => uint256) public prices;
+    mapping(address => int64) public prices;
 
     mapping(address => bytes32) public addressToTokenId;
 
@@ -75,10 +82,18 @@ contract WrapperEddyPoolsSwap is Ownable {
         addressToTokenId[asset] = tokenId;
     }
 
-    function getPriceOfToken(address token) external view returns(int64 priceUint, int32 expo) {
+    function getPriceOfToken(address token) internal view returns(int64 priceUint, int32 expo) {
         PythStructs.Price memory priceData = pyth.getPrice(addressToTokenId[token]);
         priceUint = priceData.price;
         expo = priceData.expo;
+    }
+
+    function updatePriceForAsset(address asset, int64 price) external onlyOwner {
+        prices[asset] = price;
+    }
+
+    function updatePlatformFee(uint256 _updatedFee) external onlyOwner {
+        platformFee = _updatedFee;
     }
 
     // returns sorted token addresses, used to handle return values from pairs sorted in this order
@@ -139,17 +154,15 @@ contract WrapperEddyPoolsSwap is Ownable {
         // Give approval to uniswap
         IZRC20(tokenIn).approve(address(systemContract.uniswapv2Router02Address()), amountIn - platformFeesForTx);
 
-        uint256 uintPriceOfAsset = prices[tokenIn];
+        (int64 priceUint, int32 expo) = getPriceOfToken(tokenIn);
 
-        if (uintPriceOfAsset == 0) revert NoPriceData();
-
-        uint256 dollarValueOfTrade = (amountIn * uintPriceOfAsset);
+        if (priceUint == 0) revert NoPriceData();
 
         uint256[] memory amounts = IUniswapV2Router01(
             systemContract.uniswapv2Router02Address()
             ).swapExactTokensForTokens(
             amountIn - platformFeesForTx,
-            0,
+            amountOutMin,
             path,
             msg.sender,
             block.timestamp + MAX_DEADLINE
@@ -162,7 +175,8 @@ contract WrapperEddyPoolsSwap is Ownable {
             amountIn,
             amounts[path.length - 1],
             platformFeesForTx,
-            dollarValueOfTrade
+            priceUint,
+            expo
         );
 
         return amounts[path.length - 1];
@@ -178,17 +192,10 @@ contract WrapperEddyPoolsSwap is Ownable {
         address tokenIn = path[0];
         address tokenOut = path[path.length - 1];
 
-
-        uint256 uintPriceOfAsset = prices[tokenIn];
-
-        if (uintPriceOfAsset == 0) revert NoPriceData();
-
-        uint256 dollarValueOfTrade = (msg.value * uintPriceOfAsset);
-
         uint256[] memory amounts = IUniswapV2Router01(
             systemContract.uniswapv2Router02Address()
             ).swapExactETHForTokens{value: msg.value }(
-            0,
+            amountOutMin,
             path,
             address(this),
             block.timestamp + MAX_DEADLINE
@@ -208,7 +215,8 @@ contract WrapperEddyPoolsSwap is Ownable {
             msg.value,
             amountOut,
             platformFeesForTx,
-            dollarValueOfTrade
+            prices[WZETA],
+            0
         );
 
         return amounts[path.length - 1];
@@ -237,17 +245,15 @@ contract WrapperEddyPoolsSwap is Ownable {
         // Give approval to uniswap
         IZRC20(tokenIn).approve(address(systemContract.uniswapv2Router02Address()), amountIn - platformFeesForTx);
 
-        uint256 uintPriceOfAsset = prices[tokenIn];
+        (int64 priceUint, int32 expo) = getPriceOfToken(tokenIn);
 
-        if (uintPriceOfAsset == 0) revert NoPriceData();
-
-        uint256 dollarValueOfTrade = (amountIn * uintPriceOfAsset);
+        if (priceUint == 0) revert NoPriceData();
 
         uint256[] memory amounts = IUniswapV2Router01(
             systemContract.uniswapv2Router02Address()
             ).swapExactTokensForETH(
             amountIn - platformFeesForTx,
-            0,
+            amountOutMin,
             path,
             msg.sender,
             block.timestamp + MAX_DEADLINE
@@ -260,7 +266,8 @@ contract WrapperEddyPoolsSwap is Ownable {
             amountIn,
             amounts[path.length - 1],
             platformFeesForTx,
-            dollarValueOfTrade
+            priceUint,
+            expo
         );
 
         return amounts[path.length - 1];
@@ -286,21 +293,17 @@ contract WrapperEddyPoolsSwap is Ownable {
         IZRC20(token).approve(address(systemContract.uniswapv2Router02Address()), amountTokenDesired);
 
 
-        uint256 uintPriceOfAssetA = prices[token];
-        uint256 uintPriceOfAssetB = prices[WZETA];
+        (int64 priceUintA, int32 expoA) = getPriceOfToken(token);
 
-        if (uintPriceOfAssetA == 0) revert NoPriceData();
-        if (uintPriceOfAssetB == 0) revert NoPriceData();
-
-        uint256 dollarValueOfTrade = (amountTokenDesired * uintPriceOfAssetA) + (msg.value + uintPriceOfAssetB);
+        if (priceUintA == 0) revert NoPriceData();
 
         (uint amountToken, uint amountETH, uint liquidity) = IUniswapV2Router01(
             systemContract.uniswapv2Router02Address()
         ).addLiquidityETH{ value: msg.value }(
             token,
             amountTokenDesired,
-            0,
-            0,
+            amountTokenMin,
+            amountETHMin,
             address(this),
             block.timestamp + MAX_DEADLINE
         );
@@ -331,7 +334,10 @@ contract WrapperEddyPoolsSwap is Ownable {
             amountETH,
             liquidity,
             platformFeesForTx,
-            dollarValueOfTrade
+            priceUintA,
+            expoA,
+            prices[WZETA],
+            0
         );
 
     }
@@ -362,8 +368,8 @@ contract WrapperEddyPoolsSwap is Ownable {
         ).removeLiquidityETH(
             token,
             liquidity,
-            0,
-            0,
+            amountTokenMin,
+            amountETHMin,
             address(this),
             block.timestamp + MAX_DEADLINE
         );
@@ -378,13 +384,9 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         require(sent, "FAILED TO TRANSFER ETH TO USER eddyRemoveLiquidityEth");
 
-        uint256 uintPriceOfAssetA = prices[token];
-        uint256 uintPriceOfAssetB = prices[WZETA];
+        (int64 priceUintA, int32 expoA) = getPriceOfToken(token);
 
-        if (uintPriceOfAssetA == 0) revert NoPriceData();
-        if (uintPriceOfAssetB == 0) revert NoPriceData();
-
-        uint256 dollarValueOfTrade = (amountToken * uintPriceOfAssetA) + (amountETH + uintPriceOfAssetB);
+        if (priceUintA == 0) revert NoPriceData();
 
         emit EddyLiquidityRemoved(
             msg.sender,
@@ -394,16 +396,12 @@ contract WrapperEddyPoolsSwap is Ownable {
             amountToken,
             amountETH,
             platformFeesForTx,
-            dollarValueOfTrade
+            priceUintA,
+            expoA,
+            prices[WZETA],
+            0
         );
 
     }
 
-    function updatePriceForAsset(address asset, uint256 price) external onlyOwner {
-        prices[asset] = price;
-    }
-
-    function updatePlatformFee(uint256 _updatedFee) external onlyOwner {
-        platformFee = _updatedFee;
-    }
 }
