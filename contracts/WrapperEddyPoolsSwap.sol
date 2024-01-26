@@ -14,6 +14,7 @@ contract WrapperEddyPoolsSwap is Ownable {
     error NoPriceData();
 
     uint16 internal constant MAX_DEADLINE = 200;
+    uint256 public slippage;
     address public constant WZETA = 0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf;
 
     IPyth pyth;
@@ -67,11 +68,13 @@ contract WrapperEddyPoolsSwap is Ownable {
     constructor(
         address systemContractAddress,
         address _pythContractAddress,
-        uint256 _platformFee
+        uint256 _platformFee,
+        uint256 _slippage
     ) {
         systemContract = SystemContract(systemContractAddress);
         pyth = IPyth(_pythContractAddress);
         platformFee = _platformFee;
+        slippage = _slippage;
     }
 
     error CantBeIdenticalAddresses();
@@ -154,6 +157,8 @@ contract WrapperEddyPoolsSwap is Ownable {
         // Give approval to uniswap
         IZRC20(tokenIn).approve(address(systemContract.uniswapv2Router02Address()), amountIn - platformFeesForTx);
 
+        amountOutMin = (amountIn - platformFeesForTx) - (slippage * (amountIn - platformFeesForTx) / 1000);
+
         (int64 priceUint, int32 expo) = getPriceOfToken(tokenIn);
 
         if (priceUint == 0) revert NoPriceData();
@@ -191,6 +196,8 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         address tokenIn = path[0];
         address tokenOut = path[path.length - 1];
+
+        amountOutMin = msg.value - (slippage * msg.value) / 1000;
 
         uint256[] memory amounts = IUniswapV2Router01(
             systemContract.uniswapv2Router02Address()
@@ -245,6 +252,8 @@ contract WrapperEddyPoolsSwap is Ownable {
         // Give approval to uniswap
         IZRC20(tokenIn).approve(address(systemContract.uniswapv2Router02Address()), amountIn - platformFeesForTx);
 
+        amountOutMin = (amountIn - platformFeesForTx) - (slippage * (amountIn - platformFeesForTx) / 1000);
+
         (int64 priceUint, int32 expo) = getPriceOfToken(tokenIn);
 
         if (priceUint == 0) revert NoPriceData();
@@ -292,6 +301,8 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         IZRC20(token).approve(address(systemContract.uniswapv2Router02Address()), amountTokenDesired);
 
+        amountTokenMin = amountTokenDesired - (slippage * amountTokenDesired) / 1000;
+        amountETHMin = msg.value - (slippage * msg.value) / 1000;
 
         (int64 priceUintA, int32 expoA) = getPriceOfToken(token);
 
@@ -362,6 +373,9 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         
         IERC20(pairAddress).approve(address(systemContract.uniswapv2Router02Address()), liquidity);
+
+        // amountTokenMin = amountTokenMin - (slippage * amountTokenMin) / 1000;
+        // amountETHMin = amountETHMin - (slippage * amountETHMin) / 1000;
 
         (uint amountToken, uint amountETH) = IUniswapV2Router01(
             systemContract.uniswapv2Router02Address()
