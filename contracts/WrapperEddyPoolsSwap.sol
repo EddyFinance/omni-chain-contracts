@@ -14,7 +14,7 @@ contract WrapperEddyPoolsSwap is Ownable {
     error NoPriceData();
 
     uint16 internal constant MAX_DEADLINE = 200;
-    address public immutable WZETA = 0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf;
+    address public constant WZETA = 0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf;
 
     IPyth pyth;
 

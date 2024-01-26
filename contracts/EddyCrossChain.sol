@@ -4,6 +4,8 @@ pragma solidity 0.8.7;
 import "@zetachain/protocol-contracts/contracts/zevm/SystemContract.sol";
 import "@zetachain/protocol-contracts/contracts/zevm/interfaces/zContract.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
+import "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
 import "@zetachain/toolkit/contracts/BytesHelperLib.sol";
 import "@zetachain/toolkit/contracts/SwapHelperLib.sol";
 
@@ -14,6 +16,8 @@ contract EddyCrossChain is zContract, Ownable {
 
     SystemContract public immutable systemContract;
 
+    IPyth pyth;
+
     event EddyCrossChainSwap(
         address zrc20,
         address targetZRC20,
@@ -21,20 +25,35 @@ contract EddyCrossChain is zContract, Ownable {
         uint256 outputAmount,
         address walletAddress,
         uint256 fees,
-        uint256 dollarValueOfTrade
+        int64 priceUint,
+        int32 expo
     );
 
     // Testnet BTC(Zeth)
-    address public immutable BTC_ZETH = 0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
+    address public constant BTC_ZETH = 0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
     uint256 public platformFee;
-    mapping(address => uint256) public prices;
 
-    constructor(address systemContractAddress, uint256 _platformFee) {
+    mapping(address => int64) public prices;
+
+    mapping(address => bytes32) public addressToTokenId;
+
+    constructor(address systemContractAddress, address _pythContractAddress, uint256 _platformFee) {
         systemContract = SystemContract(systemContractAddress);
+        pyth = IPyth(_pythContractAddress);
         platformFee = _platformFee;
     }
 
-    function updatePriceForAsset(address asset, uint256 price) external onlyOwner {
+    function updateAddressToTokenId(bytes32 tokenId, address asset) external onlyOwner {
+        addressToTokenId[asset] = tokenId;
+    }
+
+    function getPriceOfToken(address token) internal view returns(int64 priceUint, int32 expo) {
+        PythStructs.Price memory priceData = pyth.getPrice(addressToTokenId[token]);
+        priceUint = priceData.price;
+        expo = priceData.expo;
+    }
+
+    function updatePriceForAsset(address asset, int64 price) external onlyOwner {
         prices[asset] = price;
     }
 
@@ -114,14 +133,14 @@ contract EddyCrossChain is zContract, Ownable {
 
         require(IZRC20(zrc20).transfer(owner(), platformFeesForTx), "ZRC20 - Transfer failed to owner");
 
+        // First 20 bytes is target
         address targetZRC20 = getTargetOnly(message);
-        uint256 minAmt = 0;
 
-        uint256 uintPriceOfAsset = prices[zrc20];
+        uint256 minAmt = (amount - platformFeesForTx) - (5 * (amount - platformFeesForTx)) / 1000; // Set manual slippage of 0.5% initially
 
-        if (uintPriceOfAsset == 0) revert NoPriceData();
+        (int64 priceUint, int32 expo) = getPriceOfToken(zrc20);
 
-        uint256 dollarValueOfTrade = (amount * uintPriceOfAsset);
+        if (priceUint == 0) revert NoPriceData();
 
          if (targetZRC20 == BTC_ZETH) {
             bytes memory recipientAddressBech32 = bytesToBech32Bytes(message, 20);
@@ -138,7 +157,7 @@ contract EddyCrossChain is zContract, Ownable {
 
             IZRC20(targetZRC20).withdraw(recipientAddressBech32, outputAmount - gasFee);
 
-            emit EddyCrossChainSwap(zrc20, targetZRC20, amount, outputAmount, evmWalletAddress, platformFeesForTx, dollarValueOfTrade);
+            emit EddyCrossChainSwap(zrc20, targetZRC20, amount, outputAmount, evmWalletAddress, platformFeesForTx, priceUint, expo);
         } else {
             bytes32 recipient = getRecipientOnly(message);
             address evmWalletAddress = BytesHelperLib.bytesToAddress(message, 20);
@@ -150,7 +169,7 @@ contract EddyCrossChain is zContract, Ownable {
             );
 
             SwapHelperLib._doWithdrawal(targetZRC20, outputAmount, recipient);
-            emit EddyCrossChainSwap(zrc20, targetZRC20, amount, outputAmount, evmWalletAddress, platformFeesForTx, dollarValueOfTrade);
+            emit EddyCrossChainSwap(zrc20, targetZRC20, amount, outputAmount, evmWalletAddress, platformFeesForTx, priceUint, expo);
         }
     }
 }
