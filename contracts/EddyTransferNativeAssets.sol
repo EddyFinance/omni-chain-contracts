@@ -10,6 +10,7 @@ import "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol";
 import "./interfaces/IWZETA.sol";
+import "./libraries/UniswapV2Library.sol";
 
 contract EddyTransferNativeAssets is zContract, Ownable {
     error SenderNotSystemContract();
@@ -95,8 +96,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
     function transferZetaToConnectedChain(
         bytes calldata withdrawData,
         address zrc20, // Pass WZETA address here
-        address targetZRC20,
-        uint256 minAmount
+        address targetZRC20
     ) external payable {
         // Store fee in aZeta
         uint256 platformFeesForTx = (msg.value * platformFee) / 1000; // platformFee = 5 <> 0.5%
@@ -115,13 +115,19 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
         if (priceUint == 0) revert NoPriceData();
 
-        minAmount = (msg.value - platformFeesForTx) - (slippage * (msg.value - platformFeesForTx) / 1000);
+        uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
+            systemContract.uniswapv2FactoryAddress(),
+            msg.value - platformFeesForTx,
+            getPathForTokens(zrc20, targetZRC20)
+        );
+
+        uint amountOutMin = (amountsQuote[amountsQuote.length - 1]) - (slippage * amountsQuote[amountsQuote.length - 1]) / 1000;
 
         uint256 outputAmount = _swap(
             zrc20,
             msg.value - platformFeesForTx,
             targetZRC20,
-            minAmount
+            amountOutMin
         );
 
         if (isTargetZRC20BTC_ZETH) {
@@ -150,8 +156,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         bytes calldata withdrawData,
         uint256 amount,
         address zrc20,
-        address targetZRC20,
-        uint256 minAmount
+        address targetZRC20
     ) external {
         bool isTargetZRC20BTC_ZETH = targetZRC20 == BTC_ZETH;
         address tokenToUse = (targetZRC20 == zrc20) ? zrc20 : targetZRC20;
@@ -174,7 +179,13 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
         if (priceUint == 0) revert NoPriceData();
 
-        minAmount = (amount - platformFeesForTx) - (slippage * (amount - platformFeesForTx) / 1000);
+        uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
+            systemContract.uniswapv2FactoryAddress(),
+            amount - platformFeesForTx,
+            getPathForTokens(zrc20, targetZRC20)
+        );
+
+        uint amountOutMin = (amountsQuote[amountsQuote.length - 1]) - (slippage * amountsQuote[amountsQuote.length - 1]) / 1000;
 
         if (targetZRC20 != zrc20) {
             // swap and update the amount
@@ -182,7 +193,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
                 zrc20,
                 amount - platformFeesForTx,
                 targetZRC20,
-                minAmount
+                amountOutMin
             );
         }
 
@@ -232,6 +243,43 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
     fallback() external payable {}
 
+    function _existsPairPool(
+        address uniswapV2Factory,
+        address zrc20A,
+        address zrc20B
+    ) internal view returns (bool) {
+        address uniswapPool = SwapHelperLib.uniswapv2PairFor(
+            uniswapV2Factory,
+            zrc20A,
+            zrc20B
+        );
+        return
+            IZRC20(zrc20A).balanceOf(uniswapPool) > 0 &&
+            IZRC20(zrc20B).balanceOf(uniswapPool) > 0;
+    }
+
+    function getPathForTokens(
+        address zrc20,
+        address targetZRC20
+    ) internal view returns(address[] memory path) {
+        bool existsPairPool = _existsPairPool(
+            systemContract.uniswapv2FactoryAddress(),
+            zrc20,
+            targetZRC20
+        );
+
+        if (existsPairPool) {
+            path = new address[](2);
+            path[0] = zrc20;
+            path[1] = targetZRC20;
+        } else {
+            path = new address[](3);
+            path[0] = zrc20;
+            path[1] = AZETA;
+            path[2] = targetZRC20;
+        }
+    }
+
 
     function onCrossChainCall(
         zContext calldata context,
@@ -270,13 +318,20 @@ contract EddyTransferNativeAssets is zContract, Ownable {
             // same token
             require(IZRC20(targetZRC20).transfer(senderEvmAddress, amount - platformFeesForTx), "Failed to transfer to user wallet");
         } else {
-            uint256 minAmt = (amount - platformFeesForTx) - (slippage * (amount - platformFeesForTx) / 1000); // Set manual slippage of 0.5% initially
+
+            uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
+                systemContract.uniswapv2FactoryAddress(),
+                amount - platformFeesForTx,
+                getPathForTokens(zrc20, targetZRC20)
+            );
+
+            uint amountOutMin = (amountsQuote[amountsQuote.length - 1]) - (slippage * amountsQuote[amountsQuote.length - 1]) / 1000;
             // swap
             uint256 outputAmount = _swap(
                 zrc20,
                 amount - platformFeesForTx,
                 targetZRC20,
-                minAmt
+                amountOutMin
             );
             if (targetZRC20 == AZETA) {
                 // withdraw WZETA to get aZeta in 1:1 ratio

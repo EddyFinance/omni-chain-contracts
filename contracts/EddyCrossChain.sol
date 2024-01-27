@@ -8,6 +8,8 @@ import "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
 import "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
 import "@zetachain/toolkit/contracts/BytesHelperLib.sol";
 import "@zetachain/toolkit/contracts/SwapHelperLib.sol";
+import "@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol";
+import "./libraries/UniswapV2Library.sol";
 
 contract EddyCrossChain is zContract, Ownable {
     error SenderNotSystemContract();
@@ -31,6 +33,7 @@ contract EddyCrossChain is zContract, Ownable {
 
     // Testnet BTC(Zeth)
     address public constant BTC_ZETH = 0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
+    address public constant WZETA = 0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf;
 
     uint256 public platformFee;
     uint256 public slippage;
@@ -127,6 +130,43 @@ contract EddyCrossChain is zContract, Ownable {
 
     }
 
+    function _existsPairPool(
+        address uniswapV2Factory,
+        address zrc20A,
+        address zrc20B
+    ) internal view returns (bool) {
+        address uniswapPool = SwapHelperLib.uniswapv2PairFor(
+            uniswapV2Factory,
+            zrc20A,
+            zrc20B
+        );
+        return
+            IZRC20(zrc20A).balanceOf(uniswapPool) > 0 &&
+            IZRC20(zrc20B).balanceOf(uniswapPool) > 0;
+    }
+
+    function getPathForTokens(
+        address zrc20,
+        address targetZRC20
+    ) internal view returns(address[] memory path) {
+        bool existsPairPool = _existsPairPool(
+            systemContract.uniswapv2FactoryAddress(),
+            zrc20,
+            targetZRC20
+        );
+
+        if (existsPairPool) {
+            path = new address[](2);
+            path[0] = zrc20;
+            path[1] = targetZRC20;
+        } else {
+            path = new address[](3);
+            path[0] = zrc20;
+            path[1] = WZETA;
+            path[2] = targetZRC20;
+        }
+    }
+
     receive() external payable {}
 
     fallback() external payable {}
@@ -148,7 +188,13 @@ contract EddyCrossChain is zContract, Ownable {
         // First 20 bytes is target
         address targetZRC20 = getTargetOnly(message);
 
-        uint256 minAmt = (amount - platformFeesForTx) - (slippage * (amount - platformFeesForTx) / 1000);
+        uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
+            systemContract.uniswapv2FactoryAddress(),
+            amount - platformFeesForTx,
+            getPathForTokens(zrc20, targetZRC20)
+        );
+
+        uint amountOutMin = (amountsQuote[amountsQuote.length - 1]) - (slippage * amountsQuote[amountsQuote.length - 1]) / 1000;
 
         (int64 priceUint, int32 expo) = getPriceOfToken(zrc20);
 
@@ -161,7 +207,7 @@ contract EddyCrossChain is zContract, Ownable {
                 zrc20,
                 amount - platformFeesForTx,
                 targetZRC20,
-                minAmt
+                amountOutMin
             );
             (, uint256 gasFee) = IZRC20(targetZRC20).withdrawGasFee();
             IZRC20(targetZRC20).approve(targetZRC20, gasFee);
@@ -177,7 +223,7 @@ contract EddyCrossChain is zContract, Ownable {
                 zrc20,
                 amount - platformFeesForTx,
                 targetZRC20,
-                minAmt
+                amountOutMin
             );
 
             SwapHelperLib._doWithdrawal(targetZRC20, outputAmount, recipient);

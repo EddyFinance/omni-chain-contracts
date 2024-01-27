@@ -10,6 +10,7 @@ import "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
 import "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "./libraries/UniswapV2Library.sol";
 
 contract WrapperEddyPoolsSwap is Ownable {
     error NoPriceData();
@@ -142,8 +143,6 @@ contract WrapperEddyPoolsSwap is Ownable {
     ) external returns(uint256) {
         require(amountIn > 0, "ZERO SWAP AMOUNT");
         address tokenIn = path[0];
-        address tokenOut = path[path.length - 1];
-
 
         require(IZRC20(tokenIn).allowance(msg.sender, address(this)) > amountIn, "INSUFFICIENT ALLOWANCE FOR TOKEN_IN");
 
@@ -158,7 +157,13 @@ contract WrapperEddyPoolsSwap is Ownable {
         // Give approval to uniswap
         IZRC20(tokenIn).approve(address(systemContract.uniswapv2Router02Address()), amountIn - platformFeesForTx);
 
-        amountOutMin = (amountIn - platformFeesForTx) - (slippage * (amountIn - platformFeesForTx) / 1000);
+        uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
+            systemContract.uniswapv2FactoryAddress(),
+            amountIn - platformFeesForTx,
+            path
+        );
+
+        amountOutMin = (amountsQuote[amountsQuote.length - 1]) - (slippage * amountsQuote[amountsQuote.length - 1]) / 1000;
 
         (int64 priceUint, int32 expo) = getPriceOfToken(tokenIn);
 
@@ -177,7 +182,7 @@ contract WrapperEddyPoolsSwap is Ownable {
         emit EddySwap(
             msg.sender,
             tokenIn,
-            tokenOut,
+            path[path.length - 1],
             amountIn,
             amounts[path.length - 1],
             platformFeesForTx,
@@ -198,7 +203,14 @@ contract WrapperEddyPoolsSwap is Ownable {
         address tokenIn = path[0];
         address tokenOut = path[path.length - 1];
 
-        amountOutMin = msg.value - (slippage * msg.value) / 1000;
+
+        uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
+            systemContract.uniswapv2FactoryAddress(),
+            msg.value,
+            path
+        );
+
+        amountOutMin = (amountsQuote[amountsQuote.length - 1]) - (slippage * amountsQuote[amountsQuote.length - 1]) / 1000;
 
         uint256[] memory amounts = IUniswapV2Router01(
             systemContract.uniswapv2Router02Address()
@@ -238,7 +250,6 @@ contract WrapperEddyPoolsSwap is Ownable {
     ) external returns(uint256) {
         require(amountIn > 0, "ZERO_SWAP_AMOUNT swapEddyExactTokensForEth");
         address tokenIn = path[0];
-        address tokenOut = path[path.length - 1];
 
         require(IZRC20(tokenIn).allowance(msg.sender, address(this)) > amountIn, "INSUFFICIENT ALLOWANCE FOR TOKEN_IN");
 
@@ -253,7 +264,13 @@ contract WrapperEddyPoolsSwap is Ownable {
         // Give approval to uniswap
         IZRC20(tokenIn).approve(address(systemContract.uniswapv2Router02Address()), amountIn - platformFeesForTx);
 
-        amountOutMin = (amountIn - platformFeesForTx) - (slippage * (amountIn - platformFeesForTx) / 1000);
+        uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
+            systemContract.uniswapv2FactoryAddress(),
+            amountIn - platformFeesForTx,
+            path
+        );
+
+        amountOutMin = (amountsQuote[amountsQuote.length - 1]) - (slippage * amountsQuote[amountsQuote.length - 1]) / 1000;
 
         (int64 priceUint, int32 expo) = getPriceOfToken(tokenIn);
 
@@ -272,7 +289,7 @@ contract WrapperEddyPoolsSwap is Ownable {
         emit EddySwap(
             msg.sender,
             tokenIn,
-            tokenOut,
+            path[path.length - 1],
             amountIn,
             amounts[path.length - 1],
             platformFeesForTx,
