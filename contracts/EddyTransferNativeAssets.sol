@@ -16,6 +16,8 @@ contract EddyTransferNativeAssets is zContract, Ownable {
     error SenderNotSystemContract();
     error WrongAmount();
     error NoPriceData();
+    error IdenticalAddresses();
+    error ZeroAddress();
 
     IPyth pyth;
 
@@ -179,16 +181,16 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
         if (priceUint == 0) revert NoPriceData();
 
-        uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
-            systemContract.uniswapv2FactoryAddress(),
-            amount - platformFeesForTx,
-            getPathForTokens(zrc20, targetZRC20)
-        );
-
-        uint amountOutMin = (amountsQuote[amountsQuote.length - 1]) - (slippage * amountsQuote[amountsQuote.length - 1]) / 1000;
-
         if (targetZRC20 != zrc20) {
             // swap and update the amount
+            uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
+                systemContract.uniswapv2FactoryAddress(),
+                amount - platformFeesForTx,
+                getPathForTokens(zrc20, targetZRC20)
+            );
+
+            uint amountOutMin = (amountsQuote[amountsQuote.length - 1]) - (slippage * amountsQuote[amountsQuote.length - 1]) / 1000;
+            
             amountToUse = _swap(
                 zrc20,
                 amount - platformFeesForTx,
@@ -243,12 +245,47 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
     fallback() external payable {}
 
+    // returns sorted token addresses, used to handle return values from pairs sorted in this order
+    function sortTokens(
+        address tokenA,
+        address tokenB
+    ) internal pure returns (address token0, address token1) {
+        if (tokenA == tokenB) revert IdenticalAddresses();
+        (token0, token1) = tokenA < tokenB
+            ? (tokenA, tokenB)
+            : (tokenB, tokenA);
+        if (token0 == address(0)) revert ZeroAddress();
+    }
+
+    // calculates the CREATE2 address for a pair without making any external calls
+    function uniswapv2PairFor(
+        address factory,
+        address tokenA,
+        address tokenB
+    ) public pure returns (address pair) {
+        (address token0, address token1) = sortTokens(tokenA, tokenB);
+        pair = address(
+            uint160(
+                uint256(
+                    keccak256(
+                        abi.encodePacked(
+                            hex"ff",
+                            factory,
+                            keccak256(abi.encodePacked(token0, token1)),
+                            hex"96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f" // init code hash
+                        )
+                    )
+                )
+            )
+        );
+    }
+
     function _existsPairPool(
         address uniswapV2Factory,
         address zrc20A,
         address zrc20B
     ) internal view returns (bool) {
-        address uniswapPool = SwapHelperLib.uniswapv2PairFor(
+        address uniswapPool = uniswapv2PairFor(
             uniswapV2Factory,
             zrc20A,
             zrc20B
