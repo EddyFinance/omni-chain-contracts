@@ -5,6 +5,7 @@ import "@zetachain/protocol-contracts/contracts/zevm/SystemContract.sol";
 import "@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router01.sol";
+import '@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol';
 import "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
 import "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -374,8 +375,28 @@ contract WrapperEddyPoolsSwap is Ownable {
         
         IERC20(pairAddress).approve(address(systemContract.uniswapv2Router02Address()), liquidity);
 
-        // amountTokenMin = amountTokenMin - (slippage * amountTokenMin) / 1000;
-        // amountETHMin = amountETHMin - (slippage * amountETHMin) / 1000;
+        uint amountTokenExpected;
+        uint amountETHExpected;
+
+        {
+            (address token0, ) = sortTokens(token, WZETA);
+
+            IUniswapV2Pair pair = IUniswapV2Pair(pairAddress);
+
+            uint lpShare = liquidity / pair.totalSupply();
+
+            (uint reserve0, uint reserve1,) = pair.getReserves();
+
+            amountTokenExpected = token0 == token ? lpShare * reserve0 : lpShare * reserve1;
+            amountETHExpected = token0 == token ? lpShare * reserve1 : lpShare * reserve0;
+
+        }
+
+        require(amountTokenExpected > 0, "ZERO_AMOUNT_EXPECTED_TOKEN");
+        require(amountETHExpected > 0, "ZERO_AMOUNT_EXPECTED_ETH");
+
+        amountTokenMin = amountTokenExpected - (slippage * amountTokenExpected) / 1000;
+        amountETHMin = amountETHExpected - (slippage * amountETHExpected) / 1000;
 
         (uint amountToken, uint amountETH) = IUniswapV2Router01(
             systemContract.uniswapv2Router02Address()
