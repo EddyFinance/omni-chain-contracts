@@ -11,6 +11,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol";
 import "./interfaces/IWZETA.sol";
 import "./libraries/UniswapV2Library.sol";
+import "./libraries/TransferHelper.sol";
 
 contract EddyTransferNativeAssets is zContract, Ownable {
     error SenderNotSystemContract();
@@ -174,7 +175,9 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
         uint256 platformFeesForTx = (amount * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
-        require(IZRC20(zrc20).transfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
+        TransferHelper.safeTransfer(zrc20, owner(), platformFeesForTx);
+
+        // require(IZRC20(zrc20).transfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
 
         // Hard coding prices, Would replace when using pyth 
         (int64 priceUint, int32 expo) = getPriceOfToken(zrc20);
@@ -190,7 +193,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
             );
 
             uint amountOutMin = (amountsQuote[amountsQuote.length - 1]) - (slippage * amountsQuote[amountsQuote.length - 1]) / 1000;
-            
+
             amountToUse = _swap(
                 zrc20,
                 amount - platformFeesForTx,
@@ -335,8 +338,10 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         // Fee for platform
         uint256 platformFeesForTx = (amount * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
+        TransferHelper.safeTransfer(zrc20, owner(), platformFeesForTx);
+
         // Use safe
-        require(IZRC20(zrc20).transfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
+        // require(IZRC20(zrc20).transfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
 
         int64 priceUint;
         int32 expo;
@@ -353,7 +358,8 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
         if (targetZRC20 == zrc20) {
             // same token
-            require(IZRC20(targetZRC20).transfer(senderEvmAddress, amount - platformFeesForTx), "Failed to transfer to user wallet");
+            TransferHelper.safeTransfer(targetZRC20, senderEvmAddress, amount - platformFeesForTx);
+            // require(IZRC20(targetZRC20).transfer(senderEvmAddress, amount - platformFeesForTx), "Failed to transfer to user wallet");
         } else {
 
             uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
@@ -377,7 +383,8 @@ contract EddyTransferNativeAssets is zContract, Ownable {
                 (bool sent, ) = payable(senderEvmAddress).call{value: outputAmount}("");
                 require(sent, "Failed to transfer aZeta");
             } else {
-                require(IZRC20(targetZRC20).transfer(senderEvmAddress, outputAmount), "Failed to transfer to user wallet");
+                TransferHelper.safeTransfer(targetZRC20, senderEvmAddress, outputAmount);
+                // require(IZRC20(targetZRC20).transfer(senderEvmAddress, outputAmount), "Failed to transfer to user wallet");
             }
         }
 

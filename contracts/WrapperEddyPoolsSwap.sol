@@ -11,6 +11,7 @@ import "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./libraries/UniswapV2Library.sol";
+import "./libraries/TransferHelper.sol";
 
 contract WrapperEddyPoolsSwap is Ownable {
     using SafeMath  for uint;
@@ -153,7 +154,9 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         uint256 platformFeesForTx = (amountIn * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
-        require(IZRC20(tokenIn).transfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
+        TransferHelper.safeTransfer(tokenIn, owner(), platformFeesForTx);
+
+        // require(IZRC20(tokenIn).safeTransfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
 
         // Give approval to uniswap
         IZRC20(tokenIn).approve(address(systemContract.uniswapv2Router02Address()), amountIn - platformFeesForTx);
@@ -225,9 +228,13 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         uint256 platformFeesForTx = (amountOut * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
-        require(IZRC20(tokenOut).transfer(owner(), platformFeesForTx), "TRANSFER OF ZRC20 FAILED TO OWNER()");
+        TransferHelper.safeTransfer(tokenOut, owner(), platformFeesForTx);
 
-        require(IZRC20(tokenOut).transfer(msg.sender, amountOut - platformFeesForTx), "TRANSFER OF ZRC20 FAILED TO USER");
+        // require(IZRC20(tokenOut).transfer(owner(), platformFeesForTx), "TRANSFER OF ZRC20 FAILED TO OWNER()");
+
+        TransferHelper.safeTransfer(tokenOut, msg.sender, amountOut - platformFeesForTx);
+
+        // require(IZRC20(tokenOut).transfer(msg.sender, amountOut - platformFeesForTx), "TRANSFER OF ZRC20 FAILED TO USER");
 
         emit EddySwap(
             msg.sender,
@@ -260,7 +267,9 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         uint256 platformFeesForTx = (amountIn * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
-        require(IZRC20(tokenIn).transfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
+        TransferHelper.safeTransfer(tokenIn, owner(), platformFeesForTx);
+
+        // require(IZRC20(tokenIn).transfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
 
         // Give approval to uniswap
         IZRC20(tokenIn).approve(address(systemContract.uniswapv2Router02Address()), amountIn - platformFeesForTx);
@@ -363,9 +372,13 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         uint256 platformFeesForTx = (liquidity * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
-        require(IERC20(pairAddress).transfer(owner(), platformFeesForTx), "FAILED TO TRANSFER FEES TO OWNER()");
+        TransferHelper.safeTransfer(pairAddress, owner(), platformFeesForTx);
 
-        require(IERC20(pairAddress).transfer(msg.sender, liquidity - platformFeesForTx), "FAILED TO TRANSFER FEES TO OWNER()");
+        // require(IERC20(pairAddress).transfer(owner(), platformFeesForTx), "FAILED TO TRANSFER FEES TO OWNER()");
+
+        TransferHelper.safeTransfer(pairAddress, msg.sender, liquidity - platformFeesForTx);
+
+        // require(IERC20(pairAddress).transfer(msg.sender, liquidity - platformFeesForTx), "FAILED TO TRANSFER FEES TO OWNER()");
 
         // Transfer any remaining eth to user
         (bool sent, ) = payable(msg.sender).call{ value: msg.value - amountETH }("");
@@ -446,9 +459,13 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         uint256 platformFeesForTx = (amountToken * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
-        require(IZRC20(token).transfer(owner(), platformFeesForTx), "FAILED TO TRANSFER TOKENS TO OWNER()");
+        TransferHelper.safeTransfer(token, owner(), platformFeesForTx);
 
-        require(IZRC20(token).transfer(msg.sender, amountToken - platformFeesForTx), "TRANSFER OF ZRC20 FAILED eddyRemoveLiquidityEth");
+        // require(IZRC20(token).transfer(owner(), platformFeesForTx), "FAILED TO TRANSFER TOKENS TO OWNER()");
+
+        TransferHelper.safeTransfer(token, msg.sender, amountToken - platformFeesForTx);
+
+        // require(IZRC20(token).transfer(msg.sender, amountToken - platformFeesForTx), "TRANSFER OF ZRC20 FAILED eddyRemoveLiquidityEth");
 
         (bool sent, ) = payable(msg.sender).call{value: amountETH}("");
 

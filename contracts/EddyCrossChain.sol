@@ -10,6 +10,7 @@ import "@zetachain/toolkit/contracts/BytesHelperLib.sol";
 import "@zetachain/toolkit/contracts/SwapHelperLib.sol";
 import "@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol";
 import "./libraries/UniswapV2Library.sol";
+import "./libraries/TransferHelper.sol";
 
 contract EddyCrossChain is zContract, Ownable {
     error SenderNotSystemContract();
@@ -220,7 +221,9 @@ contract EddyCrossChain is zContract, Ownable {
 
         uint256 platformFeesForTx = (amount * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
-        require(IZRC20(zrc20).transfer(owner(), platformFeesForTx), "ZRC20 - Transfer failed to owner");
+        TransferHelper.safeTransfer(zrc20, owner(), platformFeesForTx);
+
+        // require(IZRC20(zrc20).transfer(owner(), platformFeesForTx), "ZRC20 - Transfer failed to owner");
 
         // First 20 bytes is target
         address targetZRC20 = getTargetOnly(message);
