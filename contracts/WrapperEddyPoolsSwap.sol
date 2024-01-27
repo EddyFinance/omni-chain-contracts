@@ -319,8 +319,24 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         IZRC20(token).approve(address(systemContract.uniswapv2Router02Address()), amountTokenDesired);
 
-        amountTokenMin = amountTokenDesired - (slippage * amountTokenDesired) / 1000;
-        amountETHMin = msg.value - (slippage * msg.value) / 1000;
+        
+
+        {
+            (uint reserveA, uint reserveB) = UniswapV2Library.getReserves(
+                systemContract.uniswapv2FactoryAddress(),
+                token,
+                WZETA
+            );
+
+            uint amountETHOptimal = UniswapV2Library.quote(amountTokenDesired, reserveA, reserveB);
+            uint amountTokenOptimal = UniswapV2Library.quote(msg.value, reserveB, reserveA);
+            
+
+            amountTokenMin = amountTokenOptimal - (slippage * amountTokenOptimal) / 1000;
+            amountETHMin = amountETHOptimal - (slippage * amountETHOptimal) / 1000;
+        }
+
+
 
         (int64 priceUintA, int32 expoA) = getPriceOfToken(token);
 
