@@ -13,6 +13,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./libraries/UniswapV2Library.sol";
 
 contract WrapperEddyPoolsSwap is Ownable {
+    using SafeMath  for uint;
     error NoPriceData();
 
     uint16 internal constant MAX_DEADLINE = 200;
@@ -416,12 +417,13 @@ contract WrapperEddyPoolsSwap is Ownable {
 
             IUniswapV2Pair pair = IUniswapV2Pair(pairAddress);
 
-            uint lpShare = liquidity / pair.totalSupply();
-
             (uint reserve0, uint reserve1,) = pair.getReserves();
 
-            amountTokenExpected = token0 == token ? lpShare * reserve0 : lpShare * reserve1;
-            amountETHExpected = token0 == token ? lpShare * reserve1 : lpShare * reserve0;
+            uint amount0 = liquidity.mul(reserve0) / pair.totalSupply(); 
+            uint amount1 = liquidity.mul(reserve1) / pair.totalSupply(); 
+
+            amountTokenExpected = token0 == token ? amount0 : amount1;
+            amountETHExpected = token0 == token ? amount1 : amount0;
 
         }
 
