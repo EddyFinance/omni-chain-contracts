@@ -13,6 +13,7 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
   console.log(`🔑 Using account: ${signer.address}\n`);
 
   const wrappedZetaAddr = "0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf";
+  const pythOnZeta = "0x0708325268df9f66270f1401206434524814508b";
 
   const systemContract = getAddress("systemContract", "zeta_testnet");
 
@@ -21,7 +22,13 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
   const factory = await hre.ethers.getContractFactory(
     "EddyTransferNativeAssets"
   );
-  const contract = await factory.deploy(systemContract, wrappedZetaAddr, 5);
+  const contract = await factory.deploy(
+    systemContract,
+    wrappedZetaAddr,
+    pythOnZeta,
+    5,
+    5
+  );
 
   await contract.deployed();
 
