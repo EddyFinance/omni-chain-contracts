@@ -28,17 +28,19 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         uint256 amount,
         uint256 outputAmount,
         address walletAddress,
-        uint256 fees,
-        int64 priceUint,
-        int32 expo
+        uint256 fees
     );
 
     SystemContract public immutable systemContract;
 
     // Testnet BTC(Zeth)
-    address public constant BTC_ZETH = 0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
+    address public constant BTC_ZETH = 0x13A0c5930C028511Dc02665E7285134B6d11A5f4;
     address public constant AZETA = 0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf;
+    address public constant UniswapRouter = 0x2ca7d64A7EFE2D62A725E2B35Cf7230D6677FfEe;
+    address public constant UniswapFactory = 0x9fd96203f7b22bCF72d9DCb40ff98302376cE09c;
     IWZETA public immutable WZETA;
+
+    address private constant EddyTreasurySafe = 0x3f641963f3D9ADf82D890fd8142313dCec807ba5;
 
     uint256 public platformFee;
     uint256 public slippage;
@@ -84,6 +86,10 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         platformFee = _updatedFee;
     }
 
+    function updateSlippage(uint256 _slippage) external onlyOwner {
+        slippage = _slippage;
+    }
+
     function bytesToBech32Bytes(
         bytes calldata data,
         uint256 offset
@@ -104,7 +110,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         // Store fee in aZeta
         uint256 platformFeesForTx = (msg.value * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
-        (bool sent, ) = payable(owner()).call{value: platformFeesForTx}("");
+        (bool sent, ) = payable(EddyTreasurySafe).call{value: platformFeesForTx}("");
 
         require(sent, "Failed to transfer aZeta to owner");
 
@@ -114,12 +120,12 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
 
         // Hardcoding Zeta price, update when token launched
-        int64 priceUint = prices[AZETA];
+        // int64 priceUint = prices[AZETA];
 
-        if (priceUint == 0) revert NoPriceData();
+        // if (priceUint == 0) revert NoPriceData();
 
         uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
-            systemContract.uniswapv2FactoryAddress(),
+            UniswapFactory,
             msg.value - platformFeesForTx,
             getPathForTokens(zrc20, targetZRC20)
         );
@@ -151,7 +157,14 @@ contract EddyTransferNativeAssets is zContract, Ownable {
             );
         }
 
-        emit EddyCrossChainSwap(zrc20, targetZRC20, msg.value, msg.value - platformFeesForTx, msg.sender, platformFeesForTx, priceUint, 0);
+        emit EddyCrossChainSwap(
+            zrc20,
+            targetZRC20,
+            msg.value,
+            msg.value - platformFeesForTx,
+            msg.sender,
+            platformFeesForTx
+        );
 
     }
 
@@ -175,19 +188,19 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
         uint256 platformFeesForTx = (amount * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
-        TransferHelper.safeTransfer(zrc20, owner(), platformFeesForTx);
+        TransferHelper.safeTransfer(zrc20, EddyTreasurySafe, platformFeesForTx);
 
         // require(IZRC20(zrc20).transfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
 
         // Hard coding prices, Would replace when using pyth 
-        (int64 priceUint, int32 expo) = getPriceOfToken(zrc20);
+        // (int64 priceUint, int32 expo) = getPriceOfToken(zrc20);
 
-        if (priceUint == 0) revert NoPriceData();
+        // if (priceUint == 0) revert NoPriceData();
 
         if (targetZRC20 != zrc20) {
             // swap and update the amount
             uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
-                systemContract.uniswapv2FactoryAddress(),
+                UniswapFactory,
                 amount - platformFeesForTx,
                 getPathForTokens(zrc20, targetZRC20)
             );
@@ -220,7 +233,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
             );
         }
 
-        emit EddyCrossChainSwap(zrc20, targetZRC20, amount, amountToUse, msg.sender, platformFeesForTx, priceUint, expo);
+        emit EddyCrossChainSwap(zrc20, targetZRC20, amount, amountToUse, msg.sender, platformFeesForTx);
     }
 
     function _swap(
@@ -231,9 +244,9 @@ contract EddyTransferNativeAssets is zContract, Ownable {
     ) internal returns (uint256){
 
         uint256 outputAmount = SwapHelperLib._doSwap(
-            systemContract.wZetaContractAddress(),
-            systemContract.uniswapv2FactoryAddress(),
-            systemContract.uniswapv2Router02Address(),
+            AZETA,
+            UniswapFactory,
+            UniswapRouter,
             _zrc20,
             _amount,
             _targetZRC20,
@@ -303,7 +316,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         address targetZRC20
     ) internal view returns(address[] memory path) {
         bool existsPairPool = _existsPairPool(
-            systemContract.uniswapv2FactoryAddress(),
+            UniswapFactory,
             zrc20,
             targetZRC20
         );
@@ -338,22 +351,22 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         // Fee for platform
         uint256 platformFeesForTx = (amount * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
-        TransferHelper.safeTransfer(zrc20, owner(), platformFeesForTx);
+        TransferHelper.safeTransfer(zrc20, EddyTreasurySafe, platformFeesForTx);
 
         // Use safe
         // require(IZRC20(zrc20).transfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
 
-        int64 priceUint;
-        int32 expo;
+        // int64 priceUint;
+        // int32 expo;
 
-        if (targetZRC20 == AZETA) {
-            priceUint = prices[AZETA];
-            expo = 0;
-        } else {
-            (priceUint, expo) = getPriceOfToken(zrc20);
-        }
+        // if (targetZRC20 == AZETA) {
+        //     priceUint = prices[AZETA];
+        //     expo = 0;
+        // } else {
+        //     (priceUint, expo) = getPriceOfToken(zrc20);
+        // }
 
-        if (priceUint == 0) revert NoPriceData();
+        // if (priceUint == 0) revert NoPriceData();
 
 
         if (targetZRC20 == zrc20) {
@@ -363,7 +376,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         } else {
 
             uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
-                systemContract.uniswapv2FactoryAddress(),
+                UniswapFactory,
                 amount - platformFeesForTx,
                 getPathForTokens(zrc20, targetZRC20)
             );
@@ -388,7 +401,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
             }
         }
 
-        emit EddyCrossChainSwap(zrc20, targetZRC20, amount, amount - platformFeesForTx, senderEvmAddress, platformFeesForTx, priceUint, expo);
+        emit EddyCrossChainSwap(zrc20, targetZRC20, amount, amount - platformFeesForTx, senderEvmAddress, platformFeesForTx);
 
     }
 }

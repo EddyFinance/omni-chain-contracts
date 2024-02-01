@@ -18,6 +18,8 @@ import "./tasks/updatePricesEddyTransferNative";
 import "./tasks/testWithdraw";
 import "./tasks/deployWrapper";
 import "./tasks/updatePricesWrapper";
+import "./tasks/testTransferNative";
+import "./tasks/convertWzetaToZeta";
 
 import { getHardhatConfigNetworks } from "@zetachain/networks";
 import { HardhatUserConfig } from "hardhat/config";
@@ -41,6 +43,11 @@ const config: HardhatUserConfig = {
       //@ts-ignore
       accounts: [process.env.PRIVATE_KEY],
       url: "https://polygon-mumbai.g.alchemy.com/v2/CcIjayR-uykEFwpAt7sdfBM3swhISWXE",
+    },
+    zeta_mainnet: {
+      //@ts-ignore
+      accounts: [process.env.PRIVATE_KEY],
+      url: "https://zetachain-evm.blockpi.network/v1/rpc/public",
     },
     zeta_testnet: {
       ...getHardhatConfigNetworks().zeta_testnet,

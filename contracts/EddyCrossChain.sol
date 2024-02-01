@@ -29,14 +29,16 @@ contract EddyCrossChain is zContract, Ownable {
         uint256 amount,
         uint256 outputAmount,
         address walletAddress,
-        uint256 fees,
-        int64 priceUint,
-        int32 expo
+        uint256 fees
     );
 
     // Testnet BTC(Zeth)
-    address public constant BTC_ZETH = 0x65a45c57636f9BcCeD4fe193A602008578BcA90b;
+    address public constant BTC_ZETH = 0x13A0c5930C028511Dc02665E7285134B6d11A5f4;
     address public constant WZETA = 0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf;
+    address public constant UniswapRouter = 0x2ca7d64A7EFE2D62A725E2B35Cf7230D6677FfEe;
+    address public constant UniswapFactory = 0x9fd96203f7b22bCF72d9DCb40ff98302376cE09c;
+
+    address private constant EddyTreasurySafe = 0x3f641963f3D9ADf82D890fd8142313dCec807ba5;
 
     uint256 public platformFee;
     uint256 public slippage;
@@ -120,9 +122,9 @@ contract EddyCrossChain is zContract, Ownable {
     ) internal returns (uint256){
 
         uint256 outputAmount = SwapHelperLib._doSwap(
-            systemContract.wZetaContractAddress(),
-            systemContract.uniswapv2FactoryAddress(),
-            systemContract.uniswapv2Router02Address(),
+            WZETA,
+            UniswapFactory,
+            UniswapRouter,
             _zrc20,
             _amount,
             _targetZRC20,
@@ -188,7 +190,7 @@ contract EddyCrossChain is zContract, Ownable {
         address targetZRC20
     ) internal view returns(address[] memory path) {
         bool existsPairPool = _existsPairPool(
-            systemContract.uniswapv2FactoryAddress(),
+            UniswapFactory,
             zrc20,
             targetZRC20
         );
@@ -221,7 +223,7 @@ contract EddyCrossChain is zContract, Ownable {
 
         uint256 platformFeesForTx = (amount * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
-        TransferHelper.safeTransfer(zrc20, owner(), platformFeesForTx);
+        TransferHelper.safeTransfer(zrc20, EddyTreasurySafe, platformFeesForTx);
 
         // require(IZRC20(zrc20).transfer(owner(), platformFeesForTx), "ZRC20 - Transfer failed to owner");
 
@@ -229,16 +231,16 @@ contract EddyCrossChain is zContract, Ownable {
         address targetZRC20 = getTargetOnly(message);
 
         uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
-            systemContract.uniswapv2FactoryAddress(),
+            UniswapFactory,
             amount - platformFeesForTx,
             getPathForTokens(zrc20, targetZRC20)
         );
 
         uint amountOutMin = (amountsQuote[amountsQuote.length - 1]) - (slippage * amountsQuote[amountsQuote.length - 1]) / 1000;
 
-        (int64 priceUint, int32 expo) = getPriceOfToken(zrc20);
+        // (int64 priceUint, int32 expo) = getPriceOfToken(zrc20);
 
-        if (priceUint == 0) revert NoPriceData();
+        // if (priceUint == 0) revert NoPriceData();
 
          if (targetZRC20 == BTC_ZETH) {
             bytes memory recipientAddressBech32 = bytesToBech32Bytes(message, 20);
@@ -255,7 +257,7 @@ contract EddyCrossChain is zContract, Ownable {
 
             IZRC20(targetZRC20).withdraw(recipientAddressBech32, outputAmount - gasFee);
 
-            emit EddyCrossChainSwap(zrc20, targetZRC20, amount, outputAmount, evmWalletAddress, platformFeesForTx, priceUint, expo);
+            emit EddyCrossChainSwap(zrc20, targetZRC20, amount, outputAmount, evmWalletAddress, platformFeesForTx);
         } else {
             bytes32 recipient = getRecipientOnly(message);
             address evmWalletAddress = BytesHelperLib.bytesToAddress(message, 20);
@@ -267,7 +269,7 @@ contract EddyCrossChain is zContract, Ownable {
             );
 
             SwapHelperLib._doWithdrawal(targetZRC20, outputAmount, recipient);
-            emit EddyCrossChainSwap(zrc20, targetZRC20, amount, outputAmount, evmWalletAddress, platformFeesForTx, priceUint, expo);
+            emit EddyCrossChainSwap(zrc20, targetZRC20, amount, outputAmount, evmWalletAddress, platformFeesForTx);
         }
     }
 }

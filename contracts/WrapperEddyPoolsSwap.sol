@@ -20,6 +20,10 @@ contract WrapperEddyPoolsSwap is Ownable {
     uint16 internal constant MAX_DEADLINE = 200;
     uint256 public slippage;
     address public constant WZETA = 0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf;
+    address public constant UniswapRouter = 0x2ca7d64A7EFE2D62A725E2B35Cf7230D6677FfEe;
+    address public constant UniswapFactory = 0x9fd96203f7b22bCF72d9DCb40ff98302376cE09c;
+
+    address private constant EddyTreasurySafe = 0x3f641963f3D9ADf82D890fd8142313dCec807ba5;
 
     IPyth pyth;
 
@@ -32,11 +36,7 @@ contract WrapperEddyPoolsSwap is Ownable {
         uint256 amountA,
         uint256 amountB,
         uint256 liquidity,
-        uint256 fees,
-        int64 priceUintA,
-        int32 expoA,
-        int64 priceUintB,
-        int32 expoB
+        uint256 fees
     );
 
     event EddyLiquidityRemoved(
@@ -46,11 +46,7 @@ contract WrapperEddyPoolsSwap is Ownable {
         uint256 liquidity,
         uint256 amountA,
         uint256 amountB,
-        uint256 fees,
-        int64 priceUintA,
-        int32 expoA,
-        int64 priceUintB,
-        int32 expoB
+        uint256 fees
     );
 
     event EddySwap(
@@ -59,9 +55,7 @@ contract WrapperEddyPoolsSwap is Ownable {
         address tokenOut,
         uint256 amountIn,
         uint256 amountOut,
-        uint256 fees,
-        int64 priceUint,
-        int32 expo
+        uint256 fees
     );
 
     uint256 public platformFee;
@@ -101,6 +95,10 @@ contract WrapperEddyPoolsSwap is Ownable {
 
     function updatePlatformFee(uint256 _updatedFee) external onlyOwner {
         platformFee = _updatedFee;
+    }
+
+    function updateSlippage(uint256 _slippage) external onlyOwner {
+        slippage = _slippage;
     }
 
     // returns sorted token addresses, used to handle return values from pairs sorted in this order
@@ -154,27 +152,27 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         uint256 platformFeesForTx = (amountIn * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
-        TransferHelper.safeTransfer(tokenIn, owner(), platformFeesForTx);
+        TransferHelper.safeTransfer(tokenIn, EddyTreasurySafe, platformFeesForTx);
 
         // require(IZRC20(tokenIn).safeTransfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
 
         // Give approval to uniswap
-        IZRC20(tokenIn).approve(address(systemContract.uniswapv2Router02Address()), amountIn - platformFeesForTx);
+        IZRC20(tokenIn).approve(address(UniswapRouter), amountIn - platformFeesForTx);
 
         uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
-            systemContract.uniswapv2FactoryAddress(),
+            UniswapFactory,
             amountIn - platformFeesForTx,
             path
         );
 
         amountOutMin = (amountsQuote[amountsQuote.length - 1]) - (slippage * amountsQuote[amountsQuote.length - 1]) / 1000;
 
-        (int64 priceUint, int32 expo) = getPriceOfToken(tokenIn);
+        // (int64 priceUint, int32 expo) = getPriceOfToken(tokenIn);
 
-        if (priceUint == 0) revert NoPriceData();
+        // if (priceUint == 0) revert NoPriceData();
 
         uint256[] memory amounts = IUniswapV2Router01(
-            systemContract.uniswapv2Router02Address()
+            UniswapRouter
             ).swapExactTokensForTokens(
             amountIn - platformFeesForTx,
             amountOutMin,
@@ -189,9 +187,7 @@ contract WrapperEddyPoolsSwap is Ownable {
             path[path.length - 1],
             amountIn,
             amounts[path.length - 1],
-            platformFeesForTx,
-            priceUint,
-            expo
+            platformFeesForTx
         );
 
         return amounts[path.length - 1];
@@ -209,7 +205,7 @@ contract WrapperEddyPoolsSwap is Ownable {
 
 
         uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
-            systemContract.uniswapv2FactoryAddress(),
+            UniswapFactory,
             msg.value,
             path
         );
@@ -217,7 +213,7 @@ contract WrapperEddyPoolsSwap is Ownable {
         amountOutMin = (amountsQuote[amountsQuote.length - 1]) - (slippage * amountsQuote[amountsQuote.length - 1]) / 1000;
 
         uint256[] memory amounts = IUniswapV2Router01(
-            systemContract.uniswapv2Router02Address()
+            UniswapRouter
             ).swapExactETHForTokens{value: msg.value }(
             amountOutMin,
             path,
@@ -228,7 +224,7 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         uint256 platformFeesForTx = (amountOut * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
-        TransferHelper.safeTransfer(tokenOut, owner(), platformFeesForTx);
+        TransferHelper.safeTransfer(tokenOut, EddyTreasurySafe, platformFeesForTx);
 
         // require(IZRC20(tokenOut).transfer(owner(), platformFeesForTx), "TRANSFER OF ZRC20 FAILED TO OWNER()");
 
@@ -242,9 +238,7 @@ contract WrapperEddyPoolsSwap is Ownable {
             tokenOut,
             msg.value,
             amountOut,
-            platformFeesForTx,
-            prices[WZETA],
-            0
+            platformFeesForTx
         );
 
         return amounts[path.length - 1];
@@ -267,27 +261,27 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         uint256 platformFeesForTx = (amountIn * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
-        TransferHelper.safeTransfer(tokenIn, owner(), platformFeesForTx);
+        TransferHelper.safeTransfer(tokenIn, EddyTreasurySafe, platformFeesForTx);
 
         // require(IZRC20(tokenIn).transfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
 
         // Give approval to uniswap
-        IZRC20(tokenIn).approve(address(systemContract.uniswapv2Router02Address()), amountIn - platformFeesForTx);
+        IZRC20(tokenIn).approve(address(UniswapRouter), amountIn - platformFeesForTx);
 
         uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
-            systemContract.uniswapv2FactoryAddress(),
+            UniswapFactory,
             amountIn - platformFeesForTx,
             path
         );
 
         amountOutMin = (amountsQuote[amountsQuote.length - 1]) - (slippage * amountsQuote[amountsQuote.length - 1]) / 1000;
 
-        (int64 priceUint, int32 expo) = getPriceOfToken(tokenIn);
+        // (int64 priceUint, int32 expo) = getPriceOfToken(tokenIn);
 
-        if (priceUint == 0) revert NoPriceData();
+        // if (priceUint == 0) revert NoPriceData();
 
         uint256[] memory amounts = IUniswapV2Router01(
-            systemContract.uniswapv2Router02Address()
+            UniswapRouter
             ).swapExactTokensForETH(
             amountIn - platformFeesForTx,
             amountOutMin,
@@ -302,9 +296,7 @@ contract WrapperEddyPoolsSwap is Ownable {
             path[path.length - 1],
             amountIn,
             amounts[path.length - 1],
-            platformFeesForTx,
-            priceUint,
-            expo
+            platformFeesForTx
         );
 
         return amounts[path.length - 1];
@@ -327,13 +319,13 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         require(IZRC20(token).transferFrom(msg.sender, address(this), amountTokenDesired), "TRANSFER FROM FAILED eddyAddLiquidityEth");
 
-        IZRC20(token).approve(address(systemContract.uniswapv2Router02Address()), amountTokenDesired);
+        IZRC20(token).approve(address(UniswapRouter), amountTokenDesired);
 
         
 
         {
             (uint reserveA, uint reserveB) = UniswapV2Library.getReserves(
-                systemContract.uniswapv2FactoryAddress(),
+                UniswapFactory,
                 token,
                 WZETA
             );
@@ -348,12 +340,12 @@ contract WrapperEddyPoolsSwap is Ownable {
 
 
 
-        (int64 priceUintA, int32 expoA) = getPriceOfToken(token);
+        // (int64 priceUintA, int32 expoA) = getPriceOfToken(token);
 
-        if (priceUintA == 0) revert NoPriceData();
+        // if (priceUintA == 0) revert NoPriceData();
 
         (uint amountToken, uint amountETH, uint liquidity) = IUniswapV2Router01(
-            systemContract.uniswapv2Router02Address()
+            UniswapRouter
         ).addLiquidityETH{ value: msg.value }(
             token,
             amountTokenDesired,
@@ -365,14 +357,14 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         // Token minted in the contract
         address pairAddress = uniswapv2PairFor(
-            systemContract.uniswapv2FactoryAddress(),
+            UniswapFactory,
             token,
             WZETA
         );
 
         uint256 platformFeesForTx = (liquidity * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
-        TransferHelper.safeTransfer(pairAddress, owner(), platformFeesForTx);
+        TransferHelper.safeTransfer(pairAddress, EddyTreasurySafe, platformFeesForTx);
 
         // require(IERC20(pairAddress).transfer(owner(), platformFeesForTx), "FAILED TO TRANSFER FEES TO OWNER()");
 
@@ -392,11 +384,7 @@ contract WrapperEddyPoolsSwap is Ownable {
             amountToken,
             amountETH,
             liquidity,
-            platformFeesForTx,
-            priceUintA,
-            expoA,
-            prices[WZETA],
-            0
+            platformFeesForTx
         );
 
     }
@@ -410,7 +398,7 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         // LP address
         address pairAddress = uniswapv2PairFor(
-            systemContract.uniswapv2FactoryAddress(),
+            UniswapFactory,
             token,
             WZETA
         );
@@ -420,7 +408,7 @@ contract WrapperEddyPoolsSwap is Ownable {
         require(IERC20(pairAddress).transferFrom(msg.sender, address(this), liquidity), "TRANSFER FROM FAILED eddyRemoveLiquidityEth");
 
         
-        IERC20(pairAddress).approve(address(systemContract.uniswapv2Router02Address()), liquidity);
+        IERC20(pairAddress).approve(address(UniswapRouter), liquidity);
 
         uint amountTokenExpected;
         uint amountETHExpected;
@@ -447,7 +435,7 @@ contract WrapperEddyPoolsSwap is Ownable {
         amountETHMin = amountETHExpected - (slippage * amountETHExpected) / 1000;
 
         (uint amountToken, uint amountETH) = IUniswapV2Router01(
-            systemContract.uniswapv2Router02Address()
+            UniswapRouter
         ).removeLiquidityETH(
             token,
             liquidity,
@@ -459,7 +447,7 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         uint256 platformFeesForTx = (amountToken * platformFee) / 1000; // platformFee = 5 <> 0.5%
 
-        TransferHelper.safeTransfer(token, owner(), platformFeesForTx);
+        TransferHelper.safeTransfer(token, EddyTreasurySafe, platformFeesForTx);
 
         // require(IZRC20(token).transfer(owner(), platformFeesForTx), "FAILED TO TRANSFER TOKENS TO OWNER()");
 
@@ -471,9 +459,9 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         require(sent, "FAILED TO TRANSFER ETH TO USER eddyRemoveLiquidityEth");
 
-        (int64 priceUintA, int32 expoA) = getPriceOfToken(token);
+        // (int64 priceUintA, int32 expoA) = getPriceOfToken(token);
 
-        if (priceUintA == 0) revert NoPriceData();
+        // if (priceUintA == 0) revert NoPriceData();
 
         emit EddyLiquidityRemoved(
             msg.sender,
@@ -482,11 +470,7 @@ contract WrapperEddyPoolsSwap is Ownable {
             liquidity,
             amountToken,
             amountETH,
-            platformFeesForTx,
-            priceUintA,
-            expoA,
-            prices[WZETA],
-            0
+            platformFeesForTx
         );
 
     }
