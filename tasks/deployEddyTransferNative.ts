@@ -27,7 +27,7 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
     wrappedZetaAddr,
     pythOnZeta,
     5,
-    20
+    5
   );
 
   await contract.deployed();

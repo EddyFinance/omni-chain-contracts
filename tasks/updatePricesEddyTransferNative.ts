@@ -17,7 +17,7 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
     )
   ).abi;
 
-  const contractAddress = "0x8E0f8E7E9E121403e72151d00F4937eACB2D9Ef3";
+  const contractAddress = "0xB9b767EeE8991e300F21B2E53E3A5F48a188b58e";
 
   const contract = new hre.ethers.Contract(
     contractAddress,
@@ -25,9 +25,9 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
     signer
   );
 
-  const tx = await contract.slippage();
+  const tx = await contract.updatePlatformFee(15);
 
-  // await tx.wait();
+  await tx.wait();
 
   console.log(tx, "Transaciton zeta update price");
   

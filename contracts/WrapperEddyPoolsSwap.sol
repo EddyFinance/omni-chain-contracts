@@ -373,9 +373,10 @@ contract WrapperEddyPoolsSwap is Ownable {
         // require(IERC20(pairAddress).transfer(msg.sender, liquidity - platformFeesForTx), "FAILED TO TRANSFER FEES TO OWNER()");
 
         // Transfer any remaining eth to user
-        (bool sent, ) = payable(msg.sender).call{ value: msg.value - amountETH }("");
+        payable(msg.sender).transfer(msg.value - amountETH);
 
-        require(sent, "FAILED TO TRANSFER REMAINING ETH TO USER");
+        // Transfer remaining token
+        TransferHelper.safeTransfer(token, msg.sender, amountTokenDesired - amountToken);
 
         emit EddyLiquidityAdded(
             msg.sender,
@@ -455,9 +456,7 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         // require(IZRC20(token).transfer(msg.sender, amountToken - platformFeesForTx), "TRANSFER OF ZRC20 FAILED eddyRemoveLiquidityEth");
 
-        (bool sent, ) = payable(msg.sender).call{value: amountETH}("");
-
-        require(sent, "FAILED TO TRANSFER ETH TO USER eddyRemoveLiquidityEth");
+        payable(msg.sender).transfer(amountETH);
 
         // (int64 priceUintA, int32 expoA) = getPriceOfToken(token);
 

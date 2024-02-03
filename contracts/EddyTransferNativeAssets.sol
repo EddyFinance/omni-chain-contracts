@@ -389,12 +389,14 @@ contract EddyTransferNativeAssets is zContract, Ownable {
                 targetZRC20,
                 amountOutMin
             );
+
             if (targetZRC20 == AZETA) {
                 // withdraw WZETA to get aZeta in 1:1 ratio
                 WZETA.withdraw(outputAmount);
                 // transfer azeta
-                (bool sent, ) = payable(senderEvmAddress).call{value: outputAmount}("");
-                require(sent, "Failed to transfer aZeta");
+                payable(senderEvmAddress).transfer(outputAmount);
+                // (bool sent, ) = payable(senderEvmAddress).call{value: outputAmount}("");
+                // require(sent, "Failed to transfer aZeta");
             } else {
                 TransferHelper.safeTransfer(targetZRC20, senderEvmAddress, outputAmount);
                 // require(IZRC20(targetZRC20).transfer(senderEvmAddress, outputAmount), "Failed to transfer to user wallet");

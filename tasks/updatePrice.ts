@@ -26,9 +26,10 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
     signer
   );
 
-  const tx = await contract.slippage();
+  const tx = await contract.updatePlatformFee(15);
+  // const tx = await contract.updateSlippage(5);
 
-  // await tx.wait();
+  await tx.wait();
 
   console.log(tx, "TX =====>");
 

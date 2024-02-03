@@ -19,7 +19,7 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
   console.log(systemContract, "systemContract ======>");
 
   const factory = await hre.ethers.getContractFactory("EddyCrossChain");
-  const contract = await factory.deploy(systemContract, pythOnZeta, 5, 20);
+  const contract = await factory.deploy(systemContract, pythOnZeta, 5, 5);
   await contract.deployed();
 
   console.log(`🚀 Successfully deployed contract on ZetaChain.
