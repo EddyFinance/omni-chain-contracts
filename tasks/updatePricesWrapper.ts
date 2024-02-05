@@ -17,7 +17,7 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
     )
   ).abi;
 
-  const contractAddress = "0x7B21ab1b0b328f74747Aa87DA15973071e2b6736";
+  const contractAddress = "0xDE3167958Ad6251E8D6fF1791648b322Fc6B51bD";
 
   const contract = new hre.ethers.Contract(
     contractAddress,
@@ -25,10 +25,10 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
     signer
   );
 
-  const tx = await contract.updatePlatformFee(15);
+  const tx = await contract.platformFee();
   // const tx = await contract.updateSlippage(5);
 
-  await tx.wait();
+  // await tx.wait();
 
   console.log(tx, "TX =====>");
 

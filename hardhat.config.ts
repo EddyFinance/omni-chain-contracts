@@ -47,7 +47,7 @@ const config: HardhatUserConfig = {
     zeta_mainnet: {
       //@ts-ignore
       accounts: [process.env.PRIVATE_KEY],
-      url: "https://zetachain-evm.blockpi.network/v1/rpc/public",
+      url: "https://zetachain-evm.blockpi.network/v1/rpc/0086d6530d65bd6ad0b0d117d6dd53fafe75b684",
     },
     zeta_testnet: {
       ...getHardhatConfigNetworks().zeta_testnet,

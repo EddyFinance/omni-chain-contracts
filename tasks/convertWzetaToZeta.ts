@@ -19,7 +19,7 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
   //     )
   //   ).abi;
 
-  const wzetaAmt = hre.ethers.utils.parseEther("647");
+  const wzetaAmt = hre.ethers.utils.parseEther("3248");
 
   const contractAddress = "0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf";
 

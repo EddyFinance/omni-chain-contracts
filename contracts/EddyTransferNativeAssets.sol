@@ -176,7 +176,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
     ) external {
         bool isTargetZRC20BTC_ZETH = targetZRC20 == BTC_ZETH;
         address tokenToUse = (targetZRC20 == zrc20) ? zrc20 : targetZRC20;
-        uint256 amountToUse = amount;
+        // uint256 amountToUse = amount;
 
         // check for approval
         uint256 allowance = IZRC20(zrc20).allowance(msg.sender, address(this));
@@ -207,33 +207,53 @@ contract EddyTransferNativeAssets is zContract, Ownable {
 
             uint amountOutMin = (amountsQuote[amountsQuote.length - 1]) - (slippage * amountsQuote[amountsQuote.length - 1]) / 1000;
 
-            amountToUse = _swap(
+            uint256 amountsOut = _swap(
                 zrc20,
                 amount - platformFeesForTx,
                 targetZRC20,
                 amountOutMin
             );
-        }
 
-        if (isTargetZRC20BTC_ZETH) {
-            bytes memory recipientAddressBech32 = bytesToBech32Bytes(withdrawData, 0);
-            (, uint256 gasFee) = IZRC20(tokenToUse).withdrawGasFee();
-            IZRC20(tokenToUse).approve(tokenToUse, gasFee);
-            if (amountToUse < gasFee) revert WrongAmount();
+            if (isTargetZRC20BTC_ZETH) {
+                bytes memory recipientAddressBech32 = bytesToBech32Bytes(withdrawData, 0);
+                (, uint256 gasFee) = IZRC20(tokenToUse).withdrawGasFee();
+                IZRC20(tokenToUse).approve(tokenToUse, gasFee);
+                if (amountsOut < gasFee) revert WrongAmount();
 
-            IZRC20(tokenToUse).withdraw(recipientAddressBech32, amountToUse - gasFee);
+                IZRC20(tokenToUse).withdraw(recipientAddressBech32, amountsOut - gasFee);
+            } else {
+                // EVM withdraw
+                bytes32 recipient = BytesHelperLib.addressToBytes(msg.sender);
+
+                SwapHelperLib._doWithdrawal(
+                    tokenToUse,
+                    amountsOut,
+                    recipient
+                );
+            }
         } else {
-            // EVM withdraw
-            bytes32 recipient = BytesHelperLib.addressToBytes(msg.sender);
 
-            SwapHelperLib._doWithdrawal(
-                tokenToUse,
-                amountToUse - platformFeesForTx,
-                recipient
-            );
+            if (isTargetZRC20BTC_ZETH) {
+                bytes memory recipientAddressBech32 = bytesToBech32Bytes(withdrawData, 0);
+                (, uint256 gasFee) = IZRC20(tokenToUse).withdrawGasFee();
+                IZRC20(tokenToUse).approve(tokenToUse, gasFee);
+                if (amount - platformFeesForTx < gasFee) revert WrongAmount();
+
+                IZRC20(tokenToUse).withdraw(recipientAddressBech32, amount - platformFeesForTx - gasFee);
+            } else {
+                // EVM withdraw
+                bytes32 recipient = BytesHelperLib.addressToBytes(msg.sender);
+
+                SwapHelperLib._doWithdrawal(
+                    tokenToUse,
+                    amount - platformFeesForTx,
+                    recipient
+                );
+            }
         }
 
-        emit EddyCrossChainSwap(zrc20, targetZRC20, amount, amountToUse, msg.sender, platformFeesForTx);
+
+        emit EddyCrossChainSwap(zrc20, targetZRC20, amount, amount, msg.sender, platformFeesForTx);
     }
 
     function _swap(
