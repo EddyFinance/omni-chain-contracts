@@ -37,6 +37,7 @@ contract EddyCrossChain is zContract, Ownable {
     address public constant WZETA = 0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf;
     address public constant UniswapRouter = 0x2ca7d64A7EFE2D62A725E2B35Cf7230D6677FfEe;
     address public constant UniswapFactory = 0x9fd96203f7b22bCF72d9DCb40ff98302376cE09c;
+    uint16 internal constant MAX_DEADLINE = 200;
 
     address private constant EddyTreasurySafe = 0x3f641963f3D9ADf82D890fd8142313dCec807ba5;
 
@@ -211,6 +212,51 @@ contract EddyCrossChain is zContract, Ownable {
 
     fallback() external payable {}
 
+    function _swapAndSendERC20Tokens(
+        address targetZRC20,
+        address gasZRC20,
+        uint256 gasFee,
+        bytes32 receipient,
+        uint256 targetAmount
+    ) internal returns(uint256 amountsOutTarget) {
+
+        // Get amountOut for Input gasToken
+        uint[] memory amountsQuote = UniswapV2Library.getAmountsIn(
+            UniswapFactory,
+            gasFee,
+            getPathForTokens(targetZRC20, gasZRC20)
+        );
+
+        uint amountInMax = (amountsQuote[0]) + (slippage * amountsQuote[0]) / 1000;
+
+        // Give approval to uniswap
+        IZRC20(targetZRC20).approve(address(UniswapRouter), amountInMax);
+
+        // Swap gasFees for targetZRC20
+        uint[] memory amounts = IUniswapV2Router01(UniswapRouter)
+            .swapTokensForExactTokens(
+                gasFee, // Amount of gas token required
+                amountInMax,
+                getPathForTokens(targetZRC20, gasZRC20),
+                address(this),
+                block.timestamp + MAX_DEADLINE
+        );
+
+        require(IZRC20(gasZRC20).balanceOf(address(this)) >= gasFee, "INSUFFICIENT_GAS_FOR_WITHDRAW");
+
+        IZRC20(gasZRC20).approve(targetZRC20, gasFee);
+
+        require(targetAmount - amountInMax > 0, "INSUFFICIENT_AMOUNT_FOR_WITHDRAW");
+
+        IZRC20(targetZRC20).withdraw(
+            abi.encodePacked(receipient),
+            targetAmount - amountInMax
+        );
+
+        amountsOutTarget = targetAmount - amountInMax;
+        
+    }
+
     function onCrossChainCall(
         zContext calldata context,
         address zrc20,
@@ -242,6 +288,9 @@ contract EddyCrossChain is zContract, Ownable {
 
         // if (priceUint == 0) revert NoPriceData();
 
+        (address gasZRC20, uint256 gasFee) = IZRC20(targetZRC20)
+            .withdrawGasFee();
+
          if (targetZRC20 == BTC_ZETH) {
             bytes memory recipientAddressBech32 = bytesToBech32Bytes(message, 20);
             address evmWalletAddress = BytesHelperLib.bytesToAddress(context.origin, 0);
@@ -268,8 +317,22 @@ contract EddyCrossChain is zContract, Ownable {
                 amountOutMin
             );
 
-            SwapHelperLib._doWithdrawal(targetZRC20, outputAmount, recipient);
-            emit EddyCrossChainSwap(zrc20, targetZRC20, amount, outputAmount, evmWalletAddress, platformFeesForTx);
+            if (gasZRC20 != targetZRC20) {
+                // target token not gas token
+                // withdraw token not gas token
+                uint256 amountsOutTarget = _swapAndSendERC20Tokens(
+                    targetZRC20,
+                    gasZRC20,
+                    gasFee,
+                    recipient,
+                    outputAmount
+                );
+                emit EddyCrossChainSwap(zrc20, targetZRC20, amount, amountsOutTarget, evmWalletAddress, platformFeesForTx);
+            } else {
+                SwapHelperLib._doWithdrawal(targetZRC20, outputAmount, recipient);
+                emit EddyCrossChainSwap(zrc20, targetZRC20, amount, outputAmount, evmWalletAddress, platformFeesForTx);
+            }
+
         }
     }
 }
