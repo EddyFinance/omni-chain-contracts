@@ -54,6 +54,7 @@
     "typescript": ">=4.5.0"
   },
   "dependencies": {
-    "@pythnetwork/pyth-sdk-solidity": "^2.4.0"
+    "@pythnetwork/pyth-sdk-solidity": "^2.4.0",
+    "openzeppelin-solidity": "^4.8.1"
   }
 }
