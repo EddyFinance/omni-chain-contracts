@@ -34,7 +34,9 @@ contract EddyNFT is ERC721URIStorage, Ownable {
         return newItemId;
     }
 
-    function setClaimable(address wallet) external onlyOwner{
-        _claimableAddresses[wallet] = true;
+    function setClaimable(address[] memory wallets) external onlyOwner{
+        for (uint i = 0; i < wallets.length; i++) {
+            _claimableAddresses[wallets[i]] = true;
+        }
     }
 }

@@ -53,7 +53,7 @@ const config: HardhatUserConfig = {
     },
     zeta_testnet: {
       ...getHardhatConfigNetworks().zeta_testnet,
-      url: "https://rpc.ankr.com/zetachain_evm_athens_testnet",
+      url: "https://zetachain-athens-evm.blockpi.network/v1/rpc/public",
     },
   },
   solidity: {

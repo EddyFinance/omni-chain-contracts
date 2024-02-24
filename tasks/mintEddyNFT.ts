@@ -3,7 +3,7 @@ import { task } from "hardhat/config";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 
 const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
-  if (hre.network.name !== "zeta_mainnet") {
+  if (hre.network.name !== "zeta_testnet") {
     throw new Error(
       '🚨 Please use the "zeta_testnet" network to deploy to ZetaChain.'
     );
@@ -17,17 +17,22 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
     await hre.artifacts.readArtifact("contracts/EddyNFTRewards.sol:EddyNFT")
   ).abi;
 
-  const contractAddress = "0x278E636DB7a1BE6ABeD495F74BAd9e4cE9979966";
+  const claimableAddresses = [
+    "0x1aBeA91c444E43cBf645dB61F4DC09200F0E25b0",
+    "0x06Cf18ec8DaDA3E6b86c38DE2c5536811Cd9594C",
+  ];
+
+  const contractAddress = "0x9B93750C382867962a026eA0c241F6B685629F8d";
 
   const contract = new hre.ethers.Contract(contractAddress, eddyNftAbi, signer);
 
-  //   const claimable = await contract.setClaimable(signer.address);
+  const claimable = await contract.setClaimable(claimableAddresses);
 
-  //   console.log("Setting claim ======>");
+  console.log("Setting claim ======>");
 
-  //   await claimable.wait();
+  await claimable.wait();
 
-  //   console.log("Hash of claim ======>", claimable.hash);
+  console.log("Hash of claim ======>", claimable.hash);
 
   const tx = await contract.mintNFT(imageUri);
 
