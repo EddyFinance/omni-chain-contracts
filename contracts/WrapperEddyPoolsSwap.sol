@@ -85,8 +85,10 @@ contract WrapperEddyPoolsSwap is Ownable {
 
     function getPriceOfToken(address token) internal view returns(int64 priceUint, int32 expo) {
         PythStructs.Price memory priceData = pyth.getPrice(addressToTokenId[token]);
-        priceUint = priceData.price;
-        expo = priceData.expo;
+        priceUint = priceData.price; // 11241 / 8 * 30000000000000 / 10 ** decimals
+        expo = priceData.expo; // -8
+
+        // dollarValue / 100 * 5
     }
 
     function updatePriceForAsset(address asset, int64 price) external onlyOwner {
@@ -313,7 +315,7 @@ contract WrapperEddyPoolsSwap is Ownable {
         uint amountTokenMin,
         uint amountETHMin
     ) external payable {
-        require(msg.value > 0, "ZERO_AMOUNT_TRANSACTION");
+        require(msg.value > 0, "ZERO_AMOUNT_TRANSACTION"); // ETH.ETH
 
         require(IZRC20(token).allowance(msg.sender, address(this)) > amountTokenDesired, "INSUFFICIENT ALLOWANCE FOR TOKEN_IN");
 
@@ -342,7 +344,7 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         // (int64 priceUintA, int32 expoA) = getPriceOfToken(token);
 
-        // if (priceUintA == 0) revert NoPriceData();
+        // if (priceUintA == 0) revert NoPriceData(); // 
 
         (uint amountToken, uint amountETH, uint liquidity) = IUniswapV2Router01(
             UniswapRouter
@@ -377,6 +379,16 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         // Transfer remaining token
         TransferHelper.safeTransfer(token, msg.sender, amountTokenDesired - amountToken);
+
+        // Give tokens to user ?? How to calculate dollar value 
+        // esZetaswap -> Non-transferrable token -> Modifier so that only router can mint
+
+        // Router contract -> mint tokens 
+
+        // Router contract -> mintTokenForUser -> zsToken mint()
+
+        // IZetaswapRouter.mint(amount, msg.sender)
+
 
         emit EddyLiquidityAdded(
             msg.sender,

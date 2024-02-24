@@ -22,26 +22,59 @@ describe("Swap test", () => {
 
     // get the transferNative contract
     contract = new ethers.Contract(
-      "0x6081D792B67d466DBF81b53C0E57910537956374",
+      "0x4Bd2678602694F392361623A87Cb8e771B03BF22",
       eddyTransferNativeAbi,
       signer
     );
-  });
 
-  it("Bridge zeta to BSC USDC", async () => {
-    const tx = await contract.transferZetaToConnectedChain(
+    const abiUSDTEth = [
+      "function approve(address spender,uint256 amount) external",
+    ];
+
+    const USDTContract = new ethers.Contract(
+      "0x7c8dda80bbbe1254a7aacf3219ebe1481c6e01d7",
+      abiUSDTEth,
+      signer
+    );
+
+    const approveTx = await USDTContract.approve(
+      "0x4Bd2678602694F392361623A87Cb8e771B03BF22",
+      ethers.utils.parseUnits("2000000000000000")
+    );
+
+    await approveTx.wait();
+
+    console.log(approveTx, "Approval tx");
+    
+
+  });
+  it("Bridge USDT.ETH to USDT on BSC", async () => {
+    const tx = await contract.withdrawToNativeChain(
       "0x00000000",
-      wrappedZetaAddr,
-      usdcBSC,
+      "1230000",
+      "0x7c8dda80bbbe1254a7aacf3219ebe1481c6e01d7",
+      "0x91d4f0d54090df2d81e834c3c8ce71c6c865e79f",
       {
         gasLimit: 500000,
-        value: ethers.utils.parseEther("0.4"),
       }
     );
 
-    await tx.wait();
-
-    console.log(tx);
-    
+    console.log(tx, "transaction ======>");
   });
+
+  // it("Bridge zeta to BSC USDC", async () => {
+  //   const tx = await contract.transferZetaToConnectedChain(
+  //     "0x00000000",
+  //     wrappedZetaAddr,
+  //     usdcBSC,
+  //     {
+  //       gasLimit: 500000,
+  //       value: ethers.utils.parseEther("0.4"),
+  //     }
+  //   );
+
+  //   await tx.wait();
+
+  //   console.log(tx);
+  // });
 });

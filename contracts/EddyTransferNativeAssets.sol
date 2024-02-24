@@ -9,6 +9,7 @@ import "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
 import "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol";
+import "hardhat/console.sol";
 import "./interfaces/IWZETA.sol";
 import "./libraries/UniswapV2Library.sol";
 import "./libraries/TransferHelper.sol";
@@ -108,7 +109,8 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         address gasZRC20,
         uint256 gasFee,
         bytes32 receipient,
-        uint256 targetAmount
+        uint256 targetAmount,
+        address userEvmAddress
     ) internal returns(uint256 amountsOut) {
 
         // Get amountOut for Input gasToken
@@ -118,7 +120,11 @@ contract EddyTransferNativeAssets is zContract, Ownable {
             getPathForTokens(targetZRC20, gasZRC20) // [gasAmount ,zetaAmount,usdcAmount]
         );
 
+        console.log(amountsQuote[0], "amountsQuote =====>");
+
         uint amountInMax = (amountsQuote[0]) + (slippage * amountsQuote[0]) / 1000;
+
+        console.log(amountInMax, "amountInMax =====>");
 
         // Give approval to uniswap
         IZRC20(targetZRC20).approve(address(UniswapRouter), amountInMax);
@@ -133,16 +139,25 @@ contract EddyTransferNativeAssets is zContract, Ownable {
                 block.timestamp + MAX_DEADLINE
         );
 
+        console.log(amounts[0], amounts[1], amounts[2], "amounts _swapAndSendERC20Tokens");
+
         require(IZRC20(gasZRC20).balanceOf(address(this)) >= gasFee, "INSUFFICIENT_GAS_FOR_WITHDRAW");
 
         IZRC20(gasZRC20).approve(targetZRC20, gasFee);
 
         require(targetAmount - amountInMax > 0, "INSUFFICIENT_AMOUNT_FOR_WITHDRAW");
 
+        console.log("withdrawing", targetAmount - amountInMax);
+
         IZRC20(targetZRC20).withdraw(
             abi.encodePacked(receipient),
             targetAmount - amountInMax
         );
+
+        // if (amountInMax - amounts[0] > 0) {
+        //     // Return any change to user
+        //     TransferHelper.safeTransfer(targetZRC20, userEvmAddress, amountInMax - amounts[0]);
+        // }
 
         amountsOut = targetAmount - amountInMax;
         
@@ -216,7 +231,8 @@ contract EddyTransferNativeAssets is zContract, Ownable {
                 gasZRC20CC,
                 gasFeeCC,
                 recipient,
-                outputAmount
+                outputAmount,
+                msg.sender
             );
 
             emit EddyCrossChainSwap(
@@ -283,6 +299,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
             .withdrawGasFee();
 
         if (targetZRC20 != zrc20) {
+            console.log("Swapping tokens");
             // swap and update the amount
             uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
                 UniswapFactory,
@@ -290,7 +307,11 @@ contract EddyTransferNativeAssets is zContract, Ownable {
                 getPathForTokens(zrc20, targetZRC20)
             );
 
+            console.log(amountsQuote[amountsQuote.length - 1], "amountsQuote");
+
             uint amountOutMin = (amountsQuote[amountsQuote.length - 1]) - (slippage * amountsQuote[amountsQuote.length - 1]) / 1000;
+
+            console.log(amountOutMin, "amountOutMin =====>");
 
             uint256 amountsOut = _swap(
                 zrc20,
@@ -298,6 +319,8 @@ contract EddyTransferNativeAssets is zContract, Ownable {
                 targetZRC20,
                 amountOutMin
             );
+
+            console.log(amountsOut, "amountsOut =====>");
 
             if (targetZRC20 == BTC_ZETH) {
                 bytes memory recipientAddressBech32 = bytesToBech32Bytes(withdrawData, 0);
@@ -311,6 +334,8 @@ contract EddyTransferNativeAssets is zContract, Ownable {
             } else if (gasZRC20CC != targetZRC20) {
                 // Target token is not gas token
                 // Swap tokenIn for gasFees
+                console.log(gasZRC20CC, "gasZRC20CC =====>");
+
                 bytes32 recipient = BytesHelperLib.addressToBytes(msg.sender);
 
                 uint256 tokenAmountsOut = _swapAndSendERC20Tokens(
@@ -318,7 +343,8 @@ contract EddyTransferNativeAssets is zContract, Ownable {
                     gasZRC20CC,
                     gasFeeCC,
                     recipient,
-                    amountsOut
+                    amountsOut,
+                    msg.sender
                 );
 
                 emit EddyCrossChainSwap(zrc20, targetZRC20, amount, tokenAmountsOut, msg.sender, platformFeesForTx);
@@ -356,7 +382,8 @@ contract EddyTransferNativeAssets is zContract, Ownable {
                     gasZRC20CC,
                     gasFeeCC,
                     recipient,
-                    amount - platformFeesForTx
+                    amount - platformFeesForTx,
+                    msg.sender
                 );
 
                 emit EddyCrossChainSwap(zrc20, targetZRC20, amount, amountsOut, msg.sender, platformFeesForTx);

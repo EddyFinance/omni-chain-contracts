@@ -217,7 +217,8 @@ contract EddyCrossChain is zContract, Ownable {
         address gasZRC20,
         uint256 gasFee,
         bytes32 receipient,
-        uint256 targetAmount
+        uint256 targetAmount,
+        address userEvmAddress
     ) internal returns(uint256 amountsOutTarget) {
 
         // Get amountOut for Input gasToken
@@ -252,6 +253,12 @@ contract EddyCrossChain is zContract, Ownable {
             abi.encodePacked(receipient),
             targetAmount - amountInMax
         );
+
+        // if (amountInMax - amounts[0] > 0) {
+        //     // Return any change to user
+        //     TransferHelper.safeTransfer(targetZRC20, userEvmAddress, amountInMax - amounts[0]);
+
+        // }
 
         amountsOutTarget = targetAmount - amountInMax;
         
@@ -325,7 +332,8 @@ contract EddyCrossChain is zContract, Ownable {
                     gasZRC20,
                     gasFee,
                     recipient,
-                    outputAmount
+                    outputAmount,
+                    evmWalletAddress
                 );
                 emit EddyCrossChainSwap(zrc20, targetZRC20, amount, amountsOutTarget, evmWalletAddress, platformFeesForTx);
             } else {
