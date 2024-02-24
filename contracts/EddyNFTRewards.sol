@@ -20,7 +20,7 @@ contract EddyNFT is ERC721URIStorage, Ownable {
         public
         returns (uint256)
     {
-        require(!_claimableAddresses[msg.sender], "NFT_NOT_CLAIMABLE");
+        require(_claimableAddresses[msg.sender], "NFT_NOT_CLAIMABLE");
         require(!_minted[msg.sender], "Already minted NFT");
 
         _tokenIds.increment();

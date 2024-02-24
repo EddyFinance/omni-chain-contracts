@@ -21,6 +21,7 @@ import "./tasks/updatePricesWrapper";
 import "./tasks/testTransferNative";
 import "./tasks/convertWzetaToZeta";
 import "./tasks/deployNFT";
+import "./tasks/mintEddyNFT";
 
 import { getHardhatConfigNetworks } from "@zetachain/networks";
 import { HardhatUserConfig } from "hardhat/config";
