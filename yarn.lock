@@ -5021,6 +5021,11 @@ onetime@^5.1.0:
   dependencies:
     mimic-fn "^2.1.0"
 
+openzeppelin-solidity@^4.8.1:
+  version "4.8.1"
+  resolved "https://registry.yarnpkg.com/openzeppelin-solidity/-/openzeppelin-solidity-4.8.1.tgz#2ab492a5a53a5520401e94df36e43807de7a3b50"
+  integrity sha512-KM0pVpfrCBdifqN2ZeJZFvFuoGz3GmI4Ty/ceKNkcaf7VVWo/rLOfc5EiLh+Ukb5NadNmYo8WMeGhFA8hVWDpg==
+
 optionator@^0.8.1:
   version "0.8.3"
   resolved "https://registry.yarnpkg.com/optionator/-/optionator-0.8.3.tgz#84fa1d036fe9d3c7e21d99884b601167ec8fb495"
