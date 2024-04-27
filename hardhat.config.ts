@@ -41,6 +41,21 @@ const config: HardhatUserConfig = {
       },
     },
     ...getHardhatConfigNetworks(),
+    coredao_mainnet: {
+      //@ts-ignore
+      accounts: [process.env.PRIVATE_KEY],
+      url: "https://rpc.coredao.org",
+    },
+    coredao_testnet: {
+      //@ts-ignore
+      accounts: [process.env.PRIVATE_KEY],
+      url: "https://rpc.test.btcs.network",
+    },
+    kakarot_testnet: {
+      //@ts-ignore
+      accounts: [process.env.PRIVATE_KEY],
+      url: "https://sepolia-rpc.kakarot.org",
+    },
     polygon_mumbai: {
       //@ts-ignore
       accounts: [process.env.PRIVATE_KEY],
@@ -78,6 +93,9 @@ const config: HardhatUserConfig = {
       },
       {
         version: "0.4.18",
+      },
+      {
+        version: "0.8.10",
       },
     ],
     settings: {

@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract EddyNFT is ERC721URIStorage, Ownable {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
-    address ADMIN = 0x06Cf18ec8DaDA3E6b86c38DE2c5536811Cd9594C;    
+    address ADMIN = 0x7E1F80e8990a34b7FEebB530dCB46Dc3FB483377;    
     
     constructor(string memory name, string memory symbol)
         ERC721(name, symbol)

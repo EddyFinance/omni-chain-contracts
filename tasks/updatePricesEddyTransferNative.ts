@@ -25,9 +25,9 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
     signer
   );
 
-  const tx = await contract.updatePlatformFee(10);
+  const tx = await contract.slippage();
 
-  await tx.wait();
+  // await tx.wait();
 
   console.log(tx, "Transaciton zeta update price");
   

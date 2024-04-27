@@ -13,9 +13,9 @@ import {
 } from "../utils/common";
 
 const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
-  if (hre.network.name !== "zeta_testnet") {
+  if (hre.network.name !== "kakarot_testnet") {
     throw new Error(
-      '🚨 Please use the "zeta_testnet" network to deploy to ZetaChain.'
+      '🚨 Please use the "kakarot_testnet" network to deploy to kakarot_testnet.'
     );
   }
 

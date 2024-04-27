@@ -3,7 +3,7 @@ import { task } from "hardhat/config";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 
 const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
-  if (hre.network.name !== "zeta_testnet") {
+  if (hre.network.name !== "zeta_mainnet") {
     throw new Error(
       '🚨 Please use the "zeta_mainnet" network to deploy to ZetaChain.'
     );
@@ -13,7 +13,7 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
   console.log(`🔑 Using account: ${signer.address}\n`);
 
   const factory = await hre.ethers.getContractFactory("EddyNFT");
-  const contract = await factory.deploy("EDDY TEST", "ETT");
+  const contract = await factory.deploy("Titan", "TTN");
   await contract.deployed();
 
   console.log(`🚀 Successfully deployed contract on ZetaChain.

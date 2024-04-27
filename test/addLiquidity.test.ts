@@ -6,7 +6,7 @@ import UniswapV2RouterABI from "../abis/uniswapV2Router.json";
 import { EddyZEVMToken } from "../typechain-types";
 import { aZeta, EddyBNB, EddyBTC, EddyETH, EddyMATIC } from "../utils/common";
 
-describe("Add liquidity test", () => {
+describe("Swap test", () => {
   let uniswapV2Router: any;
   let deployer: SignerWithAddress;
   let tokenA = EddyMATIC;
