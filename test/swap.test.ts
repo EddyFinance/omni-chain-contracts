@@ -11,7 +11,7 @@ describe("Swap test", () => {
   let usdtContract: any;
   let provider: any;
   let signer: any;
-  const sushiRouter = "0x0389879e0156033202C44BF784ac18fC02edeE4f";
+  const swapRouter = "0x3D31943303aC09F2B97DF88b61c70eF00B732EA8";
 
   before(async () => {
     [signer] = await hre.ethers.getSigners();

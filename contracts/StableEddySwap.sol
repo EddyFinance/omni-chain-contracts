@@ -317,6 +317,10 @@ contract StableEddySwap is Ownable {
             amountTokenBMin = amountTokenBOptimal - (slippage * amountTokenBOptimal) / 1000;
         }
 
+        // Give approval to Uniswap
+        IZRC20(tokenA).approve(address(UniswapRouter), amountADesired);
+        IZRC20(tokenB).approve(address(UniswapRouter), amountBDesired);
+
         (uint amountTokenA, uint amountTokenB, uint liquidity) = IUniswapV2Router01(
             UniswapRouter
         ).addLiquidity(
@@ -342,10 +346,6 @@ contract StableEddySwap is Ownable {
         TransferHelper.safeTransfer(pairAddress, EddyTreasurySafe, platformFeesForTx);
 
         TransferHelper.safeTransfer(pairAddress, msg.sender, liquidity - platformFeesForTx);
-
-        // Transfer remaining token
-        TransferHelper.safeTransfer(tokenA, msg.sender, amountADesired - amountTokenA);
-        TransferHelper.safeTransfer(tokenB, msg.sender, amountBDesired - amountTokenB);
 
 
         emit EddyLiquidityAdded(

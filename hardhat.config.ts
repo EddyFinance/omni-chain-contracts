@@ -22,6 +22,7 @@ import "./tasks/testTransferNative";
 import "./tasks/convertWzetaToZeta";
 import "./tasks/deployNFT";
 import "./tasks/mintEddyNFT";
+import "./tasks/interact";
 
 import { getHardhatConfigNetworks } from "@zetachain/networks";
 import { HardhatUserConfig } from "hardhat/config";
@@ -56,6 +57,11 @@ const config: HardhatUserConfig = {
       accounts: [process.env.PRIVATE_KEY],
       url: "https://sepolia-rpc.kakarot.org",
     },
+    mode_mainnet: {
+      //@ts-ignore
+      accounts: [process.env.PRIVATE_KEY],
+      url: "https://mainnet.mode.network",
+    },
     polygon_mumbai: {
       //@ts-ignore
       accounts: [process.env.PRIVATE_KEY],
@@ -69,6 +75,11 @@ const config: HardhatUserConfig = {
     zeta_testnet: {
       ...getHardhatConfigNetworks().zeta_testnet,
       url: "https://zetachain-athens-evm.blockpi.network/v1/rpc/public",
+    },
+    zklink_mainnet: {
+      //@ts-ignore
+      accounts: [process.env.PRIVATE_KEY],
+      url: "https://rpc.zklink.io",
     },
   },
   solidity: {
