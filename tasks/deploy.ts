@@ -3,7 +3,7 @@ import { task } from "hardhat/config";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 
 const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
-  if (hre.network.name !== "mode_mainnet") {
+  if (hre.network.name !== "coredao_mainnet") {
     throw new Error(
       '🚨 Please use the "mode_mainnet" network to deploy to Core.'
     );
@@ -16,7 +16,7 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
 
   // const systemContract = "0x91d18e54DAf4F677cB28167158d6dd21F6aB3921";
 
-  const factory = await hre.ethers.getContractFactory("EddySwapRouterMode");
+  const factory = await hre.ethers.getContractFactory("CoreOpenExRouter");
   const contract = await factory.deploy(10);
   await contract.deployed();
 
