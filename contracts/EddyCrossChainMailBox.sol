@@ -205,4 +205,8 @@ contract EddyCrossChainMailBox is Ownable, IMessageRecipient {
         require(chainExists[_chainId], "CHAIN_IS_NOT_SUPPORTED");
         return counterChainContracts[_chainId];
     }
+
+    receive() external payable {}
+
+    fallback() external payable {}
 }
