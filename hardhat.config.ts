@@ -42,6 +42,11 @@ const config: HardhatUserConfig = {
       },
     },
     ...getHardhatConfigNetworks(),
+    arbitrum: {
+      //@ts-ignore
+      accounts: [process.env.PRIVATE_KEY],
+      url: "https://arb1.arbitrum.io/rpc",
+    },
     coredao_mainnet: {
       //@ts-ignore
       accounts: [process.env.PRIVATE_KEY],
@@ -61,6 +66,11 @@ const config: HardhatUserConfig = {
       //@ts-ignore
       accounts: [process.env.PRIVATE_KEY],
       url: "https://mainnet.mode.network",
+    },
+    optimism: {
+      //@ts-ignore
+      accounts: [process.env.PRIVATE_KEY],
+      url: "https://mainnet.optimism.io",
     },
     polygon_mumbai: {
       //@ts-ignore

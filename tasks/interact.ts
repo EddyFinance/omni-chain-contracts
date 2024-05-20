@@ -3,42 +3,15 @@ import { HardhatRuntimeEnvironment } from "hardhat/types";
 
 import CurveAbi from "../abis/CurveAbi.json";
 import Erc20Abi from "../abis/ERC20Abi.json";
+import MailBoxAbi from "../abis/Mailbox.json";
 
 const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
   const [signer] = await hre.ethers.getSigners();
   console.log(`🔑 Using account: ${signer.address}\n`);
-
-  const CurveContractAddr = "0xF2f6625AAAF95948C7aBD1F8e445DAa973ea6D0c";
-
-  const EddyBtc = "0x5086C84B1B4e7a89dEbcbdDbd6176c4eE4cA5e4d";
-  const EddyEth = "0x9cEC89Ce7686b1FE4Ea7cA708a38D835563dF6BF";
-
-  const EddyEthContract = new hre.ethers.Contract(EddyEth, Erc20Abi, signer);
-  const EddyBtcContract = new hre.ethers.Contract(EddyBtc, Erc20Abi, signer);
-
-  // Give approval to curveRouter
-  // const approvalEth = await EddyEthContract.approve(
-  //   CurveContractAddr,
-  //   hre.ethers.utils.parseUnits("100000", 18)
-  // );
-
-  // console.log(approvalEth, "Approval tx ======>");
-
-  // await approvalEth.wait(1);
-
-  // // Give approval to curveRouter
-  // const approvalBtc = await EddyBtcContract.approve(
-  //   CurveContractAddr,
-  //   hre.ethers.utils.parseUnits("100000", 18)
-  // );
-
-  // console.log(approvalBtc, "Approval BTC tx ======>");
-
-  // await approvalBtc.wait(1);
-
+  const ARB_MAILBOX = "0x26f4987f495eD2A52c772319986798371E4DA5f7";
   const CurveContract = new hre.ethers.Contract(
-    CurveContractAddr,
-    CurveAbi,
+    ARB_MAILBOX,
+    MailBoxAbi,
     signer
   );
   // console.log(CurveContract, "Curve contract ====>");
@@ -48,10 +21,19 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
   //   0
   // );
 
-  const swapTx = await CurveContract.remove_liquidity(
-    hre.ethers.utils.parseUnits("149952989422747", 18),
-    [0, 0]
+  const swapTx = await CurveContract.sendCrossChainMessage(
+    "0xfc88a13a3fbdf8049d5b0e1f3bf5df52acc3c199",
+    {
+      gasLimit: 400_000,
+      value: hre.ethers.utils.parseEther("0.0005"),
+    }
   );
+
+  // const swapTx = await CurveContract.withdrawBalance();
+
+  // const swapTx = await CurveContract.setCounterContractInOtherChain(
+  //   "0x26f4987f495eD2A52c772319986798371E4DA5f7"
+  // );
 
   console.log(swapTx, "Add liq ====>");
 
