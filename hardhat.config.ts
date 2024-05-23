@@ -23,6 +23,7 @@ import "./tasks/convertWzetaToZeta";
 import "./tasks/deployNFT";
 import "./tasks/mintEddyNFT";
 import "./tasks/interact";
+import "./tasks/interactNew";
 
 import { getHardhatConfigNetworks } from "@zetachain/networks";
 import { HardhatUserConfig } from "hardhat/config";
@@ -56,6 +57,12 @@ const config: HardhatUserConfig = {
       //@ts-ignore
       accounts: [process.env.PRIVATE_KEY],
       url: "https://sepolia-rpc.kakarot.org",
+    },
+    localhost: {
+      accounts: [
+        "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+      ],
+      url: "http://127.0.0.1:8545/",
     },
     mode_mainnet: {
       //@ts-ignore
@@ -116,6 +123,7 @@ const config: HardhatUserConfig = {
       },
     },
   },
+  vyper: "0.3.10",
 };
 
 export default config;

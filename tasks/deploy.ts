@@ -3,7 +3,7 @@ import { task } from "hardhat/config";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 
 const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
-  if (hre.network.name !== "coredao_mainnet") {
+  if (hre.network.name !== "localhost") {
     throw new Error(
       '🚨 Please use the "mode_mainnet" network to deploy to Core.'
     );
@@ -16,8 +16,13 @@ const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
 
   // const systemContract = "0x91d18e54DAf4F677cB28167158d6dd21F6aB3921";
 
-  const factory = await hre.ethers.getContractFactory("CoreOpenExRouter");
-  const contract = await factory.deploy(10);
+  const factory = await hre.ethers.getContractFactory("WrapperEddyPoolsSwap");
+  const contract = await factory.deploy(
+    "0xc885C4a8B112B8a165338566421c685024Ec44F9",
+    "0xc885C4a8B112B8a165338566421c685024Ec44F9",
+    5,
+    5
+  );
   await contract.deployed();
 
   console.log(`🚀 Successfully deployed contract on ZetaMainnet.
