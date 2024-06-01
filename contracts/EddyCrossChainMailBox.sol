@@ -59,6 +59,8 @@ contract EddyCrossChainMailBox is Ownable, IMessageRecipient {
             (address, uint256)
         );
 
+        require(amount > 0, "ZERO_AMOUNT_TRANSACTION");
+
         uint256 platformFeesForTx = (amount * platformFee) / 1000; // platformFee = 5 <> 0.5%
         {
             (bool sent, ) = payable(EddyTreasurySafe).call{
