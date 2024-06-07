@@ -14,6 +14,10 @@ import "./interfaces/IWZETA.sol";
 import "./libraries/UniswapV2Library.sol";
 import "./libraries/TransferHelper.sol";
 
+// 1 - Pyth integrate
+// 2 - Dynamic slippage
+// 3 - USDC/USDT tokens integrate
+
 contract EddyTransferNativeAssets is zContract, Ownable {
     error SenderNotSystemContract();
     error WrongAmount();
@@ -163,6 +167,8 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         
     }
 
+    // Transfer Zeta token to any chain
+
     function transferZetaToConnectedChain(
         bytes calldata withdrawData,
         address zrc20, // Pass WZETA address here
@@ -199,7 +205,7 @@ contract EddyTransferNativeAssets is zContract, Ownable {
             targetZRC20,
             amountOutMin
         );
-
+        // gasZRC20CC -> destination chain gas token address in ZetaChain
         (address gasZRC20CC, uint256 gasFeeCC) = IZRC20(targetZRC20)
             .withdrawGasFee();
 
@@ -503,7 +509,8 @@ contract EddyTransferNativeAssets is zContract, Ownable {
         }
     }
 
-
+    // Pass min_amount from frontend
+    // Integrate pyth > emit in event
     function onCrossChainCall(
         zContext calldata context,
         address zrc20,
@@ -559,6 +566,8 @@ contract EddyTransferNativeAssets is zContract, Ownable {
                 targetZRC20,
                 amountOutMin
             );
+
+            // Change AZeta address to 0xEeeee...
 
             if (targetZRC20 == AZETA) {
                 // withdraw WZETA to get aZeta in 1:1 ratio
