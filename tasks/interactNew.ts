@@ -1,49 +1,112 @@
 import { task } from "hardhat/config";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 
-import CurveFacAbi from "../abis/CurveFactory.json";
-import Erc20Abi from "../abis/ERC20Abi.json";
+import stETHZircuit from "../abis/stETHZircuit.json";
+import CurveZircuitAbi from "../abis/ZircuitStableSwap.json";
 
 const main = async (args: any, hre: HardhatRuntimeEnvironment) => {
   const [signer] = await hre.ethers.getSigners();
   console.log(`🔑 Using account: ${signer.address}\n`);
 
-  const CurveFactoryAddr = "0x345a6C3b0D224Db7887EFEE68821Ddaa01473b57";
+  const stableSwapZircuit = "0xCb0ca072EFb267F17289574Bf563e8dF05c7Ffe3";
 
-  const CurveFactory = new hre.ethers.Contract(
-    CurveFactoryAddr,
-    CurveFacAbi,
+  const stETH = "0x9B93750C382867962a026eA0c241F6B685629F8d";
+
+  const stETHTOkenContract = new hre.ethers.Contract(
+    stETH,
+    stETHZircuit,
     signer
   );
 
-  // Create new pool
-  const tx = await CurveFactory.deploy_plain_pool(
-    "Curve Zeta/stZeta StableSwap",
-    "stzCRV",
-    [
-      "0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf",
-      "0x45334a5B0a01cE6C260f2B570EC941C680EA62c0",
-    ],
-    200, // _A
-    4000000, // _fee,
-    20000000000,
-    866,
-    0,
-    [0, 0],
-    ["0x00000000", "0x00000000"],
-    [
-      "0x0000000000000000000000000000000000000000",
-      "0x0000000000000000000000000000000000000000",
-    ],
-    {
-      gasLimit: 400_000,
-    }
+  const tx = await stETHTOkenContract.modifyWaitTime(
+    100
   );
 
   await tx.wait();
 
-  console.log(tx, "Tx details ====>");
+  console.log(tx, "Transfer tx ===>");
   
+
+  // const allowance = await stETHTOkenContract.allowance(
+  //   signer.address,
+  //   stableSwapZircuit
+  // );
+
+  // Approve
+
+  // const approveTx = await stETHTOkenContract.approve(
+  //   stableSwapZircuit,
+  //   hre.ethers.utils.parseUnits("1000000", 18)
+  // );
+
+  // await approveTx.wait();
+
+  // console.log(approveTx, "Approve tx");
+
+  // const ContractStableSwap = new hre.ethers.Contract(
+  //   stableSwapZircuit,
+  //   [
+  //     {
+  //       inputs: [
+  //         {
+  //           name: "i",
+  //           type: "uint256",
+  //         },
+  //       ],
+  //       name: "balances",
+  //       outputs: [
+  //         {
+  //           name: "",
+  //           type: "uint256",
+  //         },
+  //       ],
+  //       stateMutability: "view",
+  //       type: "function",
+  //     },
+  //     {
+  //       inputs: [
+  //         {
+  //           name: "amounts",
+  //           type: "uint256[2]",
+  //         },
+  //         {
+  //           name: "min_mint_amount",
+  //           type: "uint256",
+  //         },
+  //       ],
+  //       name: "add_liquidity",
+  //       outputs: [
+  //         {
+  //           name: "",
+  //           type: "uint256",
+  //         },
+  //       ],
+  //       stateMutability: "payable",
+  //       type: "function",
+  //     },
+  //   ],
+  //   signer
+  // );
+
+  // const resrves = await ContractStableSwap.balances(0);
+
+  // console.log(resrves, "resrves ===>");
+
+  // const tx = await ContractStableSwap.add_liquidity(
+  //   [
+  //     hre.ethers.utils.parseEther("0.001"),
+  //     hre.ethers.utils.parseUnits("0.001", 18),
+  //   ],
+  //   0,
+  //   {
+  //     gasLimit: 500_000,
+  //     value: hre.ethers.utils.parseEther("0.001"),
+  //   }
+  // );
+
+  // await tx.wait();
+
+  // console.log(tx, "Add liq tx");
 };
 
 task("interactNew", "Interact with the contract", main);

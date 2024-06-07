@@ -83,6 +83,11 @@ const config: HardhatUserConfig = {
       ...getHardhatConfigNetworks().zeta_testnet,
       url: "https://zetachain-athens-evm.blockpi.network/v1/rpc/public",
     },
+    zircuit_testnet: {
+      //@ts-ignore
+      accounts: [process.env.PRIVATE_KEY],
+      url: "https://zircuit1.p2pify.com",
+    },
     zklink_mainnet: {
       //@ts-ignore
       accounts: [process.env.PRIVATE_KEY],

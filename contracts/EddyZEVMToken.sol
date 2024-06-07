@@ -8,6 +8,7 @@ contract EddyZEVMToken is ERC20, Ownable {
     mapping (address => uint) public userLastMintBlockNumber;
 
     uint256 public MINTING_LIMIT = 50 * 10**18; // Maximum allowed balance
+    uint256 public PER_MINT_AMOUNT_LIMIT = 1 * 10**18;
     uint256 public MIN_BLOCKS_WAIT_TIME = 8600; // Approximately a day is 8600 blocks
 
     constructor(string memory _name, string memory _symbol) ERC20(_name, _symbol) {}
@@ -15,6 +16,7 @@ contract EddyZEVMToken is ERC20, Ownable {
     // Modifier to check if minting is allowed for the given address
     modifier canMint(address to, uint256 amount) {
         require(balanceOf(to) + amount <= MINTING_LIMIT, "Minting limit reached");
+        require(amount <= PER_MINT_AMOUNT_LIMIT, "ONLY 1 TOKEN CAN BE MINTED");
         _checkLastMintBlock(to);
         _;
     }
