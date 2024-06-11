@@ -1,33 +1,37 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.7;
+pragma solidity 0.8.20;
 
-import "@zetachain/protocol-contracts/contracts/zevm/SystemContract.sol";
-import "@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router01.sol";
 import '@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol';
 import "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
 import "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "./libraries/UniswapV2Library.sol";
 import "./libraries/TransferHelper.sol";
+import "./interfaces/IWETH.sol";
 
-contract WrapperEddyPoolsSwap is Ownable {
+contract WrapperEddyPoolsSwap {
     using SafeMath  for uint;
+    address public owner;
     error NoPriceData();
 
     uint16 internal constant MAX_DEADLINE = 200;
-    uint256 public slippage;
     address public constant WZETA = 0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf;
     address public constant UniswapRouter = 0x2ca7d64A7EFE2D62A725E2B35Cf7230D6677FfEe;
     address public constant UniswapFactory = 0x9fd96203f7b22bCF72d9DCb40ff98302376cE09c;
+    address public constant ZETA = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     address private constant EddyTreasurySafe = 0x3f641963f3D9ADf82D890fd8142313dCec807ba5;
 
     IPyth pyth;
 
-    SystemContract public immutable systemContract;
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner can call this function");
+        _;
+    }
+
 
     event EddyLiquidityAdded(
         address walletAddress,
@@ -36,7 +40,11 @@ contract WrapperEddyPoolsSwap is Ownable {
         uint256 amountA,
         uint256 amountB,
         uint256 liquidity,
-        uint256 fees
+        uint256 fees,
+        int64 tokenPriceUnit1,
+        int32 tokenPriceExpo1,
+        int64 tokenPriceUnit2,
+        int32 tokenPriceExpo2
     );
 
     event EddyLiquidityRemoved(
@@ -46,7 +54,11 @@ contract WrapperEddyPoolsSwap is Ownable {
         uint256 liquidity,
         uint256 amountA,
         uint256 amountB,
-        uint256 fees
+        uint256 fees,
+        int64 tokenPriceUnit1,
+        int32 tokenPriceExpo1,
+        int64 tokenPriceUnit2,
+        int32 tokenPriceExpo2
     );
 
     event EddySwap(
@@ -55,55 +67,66 @@ contract WrapperEddyPoolsSwap is Ownable {
         address tokenOut,
         uint256 amountIn,
         uint256 amountOut,
-        uint256 fees
+        uint256 fees,
+        int64 tokenPriceUnit,
+        int32 tokenPriceExpo
     );
 
-    uint256 public platformFee;
-    mapping(address => int64) public prices;
+    struct TokenPrice {
+        int64 priceUint;
+        int32 expo;
+    }
 
-    mapping(address => bytes32) public addressToTokenId;
+    TokenPrice removeLiqToken1;
+
+    TokenPrice removeLiqToken2;
+
+    TokenPrice addLiqToken1;
+
+    TokenPrice addLiqToken2; 
+
+    uint256 public platformFee;
+
+    mapping(address => bytes32) public addressToFeedId;
 
     constructor(
-        address systemContractAddress,
         address _pythContractAddress,
-        uint256 _platformFee,
-        uint256 _slippage
+        uint256 _platformFee
     ) {
-        systemContract = SystemContract(systemContractAddress);
         pyth = IPyth(_pythContractAddress);
         platformFee = _platformFee;
-        slippage = _slippage;
+        owner = msg.sender;
     }
 
     error CantBeIdenticalAddresses();
 
     error CantBeZeroAddress();
 
-    function updateAddressToTokenId(bytes32 tokenId, address asset) external onlyOwner {
-        addressToTokenId[asset] = tokenId;
+    /// @notice Update the address to feed id
+    /// @param feedId The feed id
+    /// @param asset The asset address
+    function updateAddressToFeedId(bytes32 feedId, address asset) external onlyOwner {
+        addressToFeedId[asset] = feedId;
     }
 
-    function getPriceOfToken(address token) internal view returns(int64 priceUint, int32 expo) {
-        PythStructs.Price memory priceData = pyth.getPrice(addressToTokenId[token]);
+    /// @notice Get the price of the asset from pyth oracle
+    /// @param priceUpdate The price update
+    /// @param _priceFeed The price feed
+    /// @return priceUint The price of the asset
+    /// @return expo The exponent of the asset
+    function getPythPrice (bytes[] calldata priceUpdate,bytes32 _priceFeed) public payable returns(int64 priceUint, int32 expo) {
+        uint fee = pyth.getUpdateFee(priceUpdate);
+        pyth.updatePriceFeeds{ value: fee }(priceUpdate);
+        PythStructs.Price memory priceData = pyth.getPrice(_priceFeed);
         priceUint = priceData.price; // 11241 / 8 * 30000000000000 / 10 ** decimals
         expo = priceData.expo; // -8
-
-        // dollarValue / 100 * 5
     }
 
-    function updatePriceForAsset(address asset, int64 price) external onlyOwner {
-        prices[asset] = price;
-    }
-
-    function updatePlatformFee(uint256 _updatedFee) external onlyOwner {
-        platformFee = _updatedFee;
-    }
-
-    function updateSlippage(uint256 _slippage) external onlyOwner {
-        slippage = _slippage;
-    }
-
-    // returns sorted token addresses, used to handle return values from pairs sorted in this order
+    /// @notice Sorts the tokens
+    /// @param tokenA The first token
+    /// @param tokenB The second token
+    /// @return token0 The first token
+    /// @return token1 The second token
     function sortTokens(
         address tokenA,
         address tokenB
@@ -115,7 +138,11 @@ contract WrapperEddyPoolsSwap is Ownable {
         if (token0 == address(0)) revert CantBeZeroAddress();
     }
 
-    // calculates the CREATE2 address for a pair without making any external calls
+    /// @notice Get the pair address
+    /// @param factory The factory address
+    /// @param tokenA The first token
+    /// @param tokenB The second token
+    /// @return pair The pair address
     function uniswapv2PairFor(
         address factory,
         address tokenA,
@@ -138,17 +165,26 @@ contract WrapperEddyPoolsSwap is Ownable {
         );
     }
 
+    /// @notice Swap tokens for tokens
+    /// @param amountIn The amount of token to swap
+    /// @param amountOutMin The minimum amount of token to receive
+    /// @param path The path of the token to swap
+    /// @return amounts The amount of token received
+
     function swapEddyTokensForTokens(
         uint amountIn,
         uint amountOutMin,
-        address[] calldata path
-    ) external returns(uint256) {
+        address[] calldata path,
+        bytes[] calldata priceUpdate
+    ) external payable returns(uint[] memory amounts) {
         require(amountIn > 0, "ZERO SWAP AMOUNT");
         address tokenIn = path[0];
 
-        require(IZRC20(tokenIn).allowance(msg.sender, address(this)) > amountIn, "INSUFFICIENT ALLOWANCE FOR TOKEN_IN");
+        (int64 priceUint, int32 expo) = getPythPrice(priceUpdate,addressToFeedId[tokenIn]);
 
-        require(IZRC20(tokenIn).transferFrom(msg.sender, address(this), amountIn), "TRANSFER FROM FAILED swapEddyTokensForTokens");
+        require(IERC20(tokenIn).allowance(msg.sender, address(this)) > amountIn, "INSUFFICIENT ALLOWANCE FOR TOKEN_IN");
+
+        require(IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn), "TRANSFER FROM FAILED swapEddyTokensForTokens");
 
         // Substract fees
 
@@ -156,24 +192,10 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         TransferHelper.safeTransfer(tokenIn, EddyTreasurySafe, platformFeesForTx);
 
-        // require(IZRC20(tokenIn).safeTransfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
-
         // Give approval to uniswap
-        IZRC20(tokenIn).approve(address(UniswapRouter), amountIn - platformFeesForTx);
+        IERC20(tokenIn).approve(address(UniswapRouter), amountIn - platformFeesForTx);
 
-        uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
-            UniswapFactory,
-            amountIn - platformFeesForTx,
-            path
-        );
-
-        amountOutMin = (amountsQuote[amountsQuote.length - 1]) - (slippage * amountsQuote[amountsQuote.length - 1]) / 1000;
-
-        // (int64 priceUint, int32 expo) = getPriceOfToken(tokenIn);
-
-        // if (priceUint == 0) revert NoPriceData();
-
-        uint256[] memory amounts = IUniswapV2Router01(
+         amounts = IUniswapV2Router01(
             UniswapRouter
             ).swapExactTokensForTokens(
             amountIn - platformFeesForTx,
@@ -189,34 +211,34 @@ contract WrapperEddyPoolsSwap is Ownable {
             path[path.length - 1],
             amountIn,
             amounts[path.length - 1],
-            platformFeesForTx
+            platformFeesForTx,
+            priceUint,
+            expo
         );
-
-        return amounts[path.length - 1];
-
     }
+
+
+    /// @notice Swap ETH for tokens
+    /// @param amountOutMin The minimum amount of token to receive
+    /// @param path The path of the token to swap
+    /// @return amounts The amount of token received
 
     function swapEddyExactETHForTokens(
         uint amountOutMin,
-        address[] calldata path
-    ) external payable returns(uint256) {
-        require(msg.value > 0, "ZERO_AMOUNT_TRANSACTION");
+        address[] calldata path,
+        bytes[] calldata priceUpdate,
+        uint fee
+    ) external payable returns(uint[] memory amounts) {
+        require(msg.value > 0, "ZERO_AMOUNT_TRANSACTION");     
 
         address tokenIn = path[0];
         address tokenOut = path[path.length - 1];
 
+        (int64 priceUint, int32 expo) = getPythPrice(priceUpdate, addressToFeedId[tokenIn]);
 
-        uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
-            UniswapFactory,
-            msg.value,
-            path
-        );
-
-        amountOutMin = (amountsQuote[amountsQuote.length - 1]) - (slippage * amountsQuote[amountsQuote.length - 1]) / 1000;
-
-        uint256[] memory amounts = IUniswapV2Router01(
+         amounts = IUniswapV2Router01(
             UniswapRouter
-            ).swapExactETHForTokens{value: msg.value }(
+            ).swapExactETHForTokens{value: msg.value - 2 * fee }(
             amountOutMin,
             path,
             address(this),
@@ -228,11 +250,9 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         TransferHelper.safeTransfer(tokenOut, EddyTreasurySafe, platformFeesForTx);
 
-        // require(IZRC20(tokenOut).transfer(owner(), platformFeesForTx), "TRANSFER OF ZRC20 FAILED TO OWNER()");
-
         TransferHelper.safeTransfer(tokenOut, msg.sender, amountOut - platformFeesForTx);
 
-        // require(IZRC20(tokenOut).transfer(msg.sender, amountOut - platformFeesForTx), "TRANSFER OF ZRC20 FAILED TO USER");
+   
 
         emit EddySwap(
             msg.sender,
@@ -240,24 +260,33 @@ contract WrapperEddyPoolsSwap is Ownable {
             tokenOut,
             msg.value,
             amountOut,
-            platformFeesForTx
+            platformFeesForTx,
+            priceUint,
+            expo
         );
 
-        return amounts[path.length - 1];
-
     }
+
+    /// @notice Swap tokens for ETH
+    /// @param amountIn The amount of token to swap
+    /// @param amountOutMin The minimum amount of token to receive
+    /// @param path The path of the token to swap
+    /// @return amounts The amount of token received
 
     function swapEddyExactTokensForEth(
         uint amountIn,
         uint amountOutMin,
-        address[] calldata path
-    ) external returns(uint256) {
+        address[] calldata path,
+        bytes[] calldata priceUpdate
+    ) external payable returns(uint[] memory amounts) {
         require(amountIn > 0, "ZERO_SWAP_AMOUNT swapEddyExactTokensForEth");
         address tokenIn = path[0];
 
-        require(IZRC20(tokenIn).allowance(msg.sender, address(this)) > amountIn, "INSUFFICIENT ALLOWANCE FOR TOKEN_IN");
+         (int64 priceUint, int32 expo) = getPythPrice(priceUpdate,addressToFeedId[tokenIn]);
 
-        require(IZRC20(tokenIn).transferFrom(msg.sender, address(this), amountIn), "TRANSFER FROM FAILED swapEddyTokensForTokens");
+        require(IERC20(tokenIn).allowance(msg.sender, address(this)) > amountIn, "INSUFFICIENT ALLOWANCE FOR TOKEN_IN");
+
+        require(IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn), "TRANSFER FROM FAILED swapEddyTokensForTokens");
 
         // Substract fees
 
@@ -265,24 +294,10 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         TransferHelper.safeTransfer(tokenIn, EddyTreasurySafe, platformFeesForTx);
 
-        // require(IZRC20(tokenIn).transfer(owner(), platformFeesForTx), "Failed to transfer to owner()");
-
         // Give approval to uniswap
-        IZRC20(tokenIn).approve(address(UniswapRouter), amountIn - platformFeesForTx);
+        IERC20(tokenIn).approve(address(UniswapRouter), amountIn - platformFeesForTx);
 
-        uint[] memory amountsQuote = UniswapV2Library.getAmountsOut(
-            UniswapFactory,
-            amountIn - platformFeesForTx,
-            path
-        );
-
-        amountOutMin = (amountsQuote[amountsQuote.length - 1]) - (slippage * amountsQuote[amountsQuote.length - 1]) / 1000;
-
-        // (int64 priceUint, int32 expo) = getPriceOfToken(tokenIn);
-
-        // if (priceUint == 0) revert NoPriceData();
-
-        uint256[] memory amounts = IUniswapV2Router01(
+        amounts = IUniswapV2Router01(
             UniswapRouter
             ).swapExactTokensForETH(
             amountIn - platformFeesForTx,
@@ -292,16 +307,19 @@ contract WrapperEddyPoolsSwap is Ownable {
             block.timestamp + MAX_DEADLINE
         );
 
+       
+        
+
         emit EddySwap(
             msg.sender,
             tokenIn,
             path[path.length - 1],
             amountIn,
             amounts[path.length - 1],
-            platformFeesForTx
+            platformFeesForTx,
+            priceUint,
+            expo
         );
-
-        return amounts[path.length - 1];
 
     }
 
@@ -309,46 +327,38 @@ contract WrapperEddyPoolsSwap is Ownable {
 
     fallback() external payable {}
 
+    /// @notice Add liquidity to the pool
+    /// @param token The token to add
+    /// @param amountTokenDesired The amount of token to add
+    /// @param amountTokenMin The minimum amount of token to receive
+    /// @param amountETHMin The minimum amount of ETH to receive
+    /// @return amountToken The amount of token, amount of ETH and liquidity received
+    /// @return amountETH The amount of ETH received
+    /// @return liquidity The amount of liquidity received
+
     function eddyAddLiquidityEth(
         address token,
         uint amountTokenDesired,
         uint amountTokenMin,
-        uint amountETHMin
-    ) external payable {
+        uint amountETHMin,
+        bytes[] calldata priceUpdate,
+        uint fee
+    ) external payable returns(uint amountToken, uint amountETH, uint liquidity){
         require(msg.value > 0, "ZERO_AMOUNT_TRANSACTION"); // ETH.ETH
 
-        require(IZRC20(token).allowance(msg.sender, address(this)) > amountTokenDesired, "INSUFFICIENT ALLOWANCE FOR TOKEN_IN");
+        require(IERC20(token).allowance(msg.sender, address(this)) > amountTokenDesired, "INSUFFICIENT ALLOWANCE FOR TOKEN_IN");
 
-        require(IZRC20(token).transferFrom(msg.sender, address(this), amountTokenDesired), "TRANSFER FROM FAILED eddyAddLiquidityEth");
+        require(IERC20(token).transferFrom(msg.sender, address(this), amountTokenDesired), "TRANSFER FROM FAILED eddyAddLiquidityEth");
 
-        IZRC20(token).approve(address(UniswapRouter), amountTokenDesired);
+        IERC20(token).approve(address(UniswapRouter), amountTokenDesired);
 
-        
+        (addLiqToken1.priceUint,addLiqToken1.expo) = getPythPrice(priceUpdate,addressToFeedId[WZETA]);
 
-        {
-            (uint reserveA, uint reserveB) = UniswapV2Library.getReserves(
-                UniswapFactory,
-                token,
-                WZETA
-            );
+        (addLiqToken2.priceUint,addLiqToken2.expo) = getPythPrice(priceUpdate,addressToFeedId[token]);
 
-            uint amountETHOptimal = UniswapV2Library.quote(amountTokenDesired, reserveA, reserveB);
-            uint amountTokenOptimal = UniswapV2Library.quote(msg.value, reserveB, reserveA);
-            
-
-            amountTokenMin = amountTokenOptimal - (slippage * amountTokenOptimal) / 1000;
-            amountETHMin = amountETHOptimal - (slippage * amountETHOptimal) / 1000;
-        }
-
-
-
-        // (int64 priceUintA, int32 expoA) = getPriceOfToken(token);
-
-        // if (priceUintA == 0) revert NoPriceData(); // 
-
-        (uint amountToken, uint amountETH, uint liquidity) = IUniswapV2Router01(
+        (amountToken,amountETH,liquidity) = IUniswapV2Router01(
             UniswapRouter
-        ).addLiquidityETH{ value: msg.value }(
+        ).addLiquidityETH{ value: msg.value - 2 * fee}(
             token,
             amountTokenDesired,
             amountTokenMin,
@@ -368,86 +378,65 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         TransferHelper.safeTransfer(pairAddress, EddyTreasurySafe, platformFeesForTx);
 
-        // require(IERC20(pairAddress).transfer(owner(), platformFeesForTx), "FAILED TO TRANSFER FEES TO OWNER()");
-
         TransferHelper.safeTransfer(pairAddress, msg.sender, liquidity - platformFeesForTx);
-
-        // require(IERC20(pairAddress).transfer(msg.sender, liquidity - platformFeesForTx), "FAILED TO TRANSFER FEES TO OWNER()");
 
         // Transfer any remaining eth to user
         payable(msg.sender).transfer(msg.value - amountETH);
 
         // Transfer remaining token
         TransferHelper.safeTransfer(token, msg.sender, amountTokenDesired - amountToken);
+        {
+           
 
-        // Give tokens to user ?? How to calculate dollar value 
-        // esZetaswap -> Non-transferrable token -> Modifier so that only router can mint
-
-        // Router contract -> mint tokens 
-
-        // Router contract -> mintTokenForUser -> zsToken mint()
-
-        // IZetaswapRouter.mint(amount, msg.sender)
-
-
-        emit EddyLiquidityAdded(
-            msg.sender,
-            token,
-            WZETA,
-            amountToken,
-            amountETH,
-            liquidity,
-            platformFeesForTx
-        );
-
+            emit EddyLiquidityAdded(
+                msg.sender,
+                token,
+                WZETA,
+                amountToken,
+                amountETH,
+                liquidity,
+                platformFeesForTx,
+                addLiqToken1.priceUint,
+                addLiqToken1.expo,
+                addLiqToken2.priceUint,
+                addLiqToken2.expo
+            );
+            
+        }
+      
     }
+
+
     function eddyRemoveLiquidityEth(
         address token,
         uint liquidity,
         uint amountTokenMin,
-        uint amountETHMin
-    ) external {
+        uint amountETHMin,
+        bytes[] calldata priceUpdate
+    ) external payable returns(uint amountToken, uint amountETH){
         require(liquidity > 0, "ZERO_AMOUNT_TRANSACTION");
-
-        // LP address
-        address pairAddress = uniswapv2PairFor(
-            UniswapFactory,
-            token,
-            WZETA
-        );
-
-        require(IERC20(pairAddress).allowance(msg.sender, address(this)) > liquidity, "INSUFFICIENT ALLOWANCE FOR LP_TOKEN REMOVAL");
-
-        require(IERC20(pairAddress).transferFrom(msg.sender, address(this), liquidity), "TRANSFER FROM FAILED eddyRemoveLiquidityEth");
-
-        
-        IERC20(pairAddress).approve(address(UniswapRouter), liquidity);
-
-        uint amountTokenExpected;
-        uint amountETHExpected;
-
         {
-            (address token0, ) = sortTokens(token, WZETA);
+            // LP address
+            address pairAddress = uniswapv2PairFor(
+                UniswapFactory,
+                token,
+                WZETA
+            );
 
-            IUniswapV2Pair pair = IUniswapV2Pair(pairAddress);
+            require(IERC20(pairAddress).allowance(msg.sender, address(this)) > liquidity, "INSUFFICIENT ALLOWANCE FOR LP_TOKEN REMOVAL");
 
-            (uint reserve0, uint reserve1,) = pair.getReserves();
+            require(IERC20(pairAddress).transferFrom(msg.sender, address(this), liquidity), "TRANSFER FROM FAILED eddyRemoveLiquidityEth");
+            
+            
+            IERC20(pairAddress).approve(address(UniswapRouter), liquidity);
 
-            uint amount0 = liquidity.mul(reserve0) / pair.totalSupply(); 
-            uint amount1 = liquidity.mul(reserve1) / pair.totalSupply(); 
+            (removeLiqToken1.priceUint,removeLiqToken1.expo) = getPythPrice(priceUpdate,addressToFeedId[WZETA]);
 
-            amountTokenExpected = token0 == token ? amount0 : amount1;
-            amountETHExpected = token0 == token ? amount1 : amount0;
+            (removeLiqToken2.priceUint,removeLiqToken2.expo) = getPythPrice(priceUpdate,addressToFeedId[token]);
 
         }
-
-        require(amountTokenExpected > 0, "ZERO_AMOUNT_EXPECTED_TOKEN");
-        require(amountETHExpected > 0, "ZERO_AMOUNT_EXPECTED_ETH");
-
-        amountTokenMin = amountTokenExpected - (slippage * amountTokenExpected) / 1000;
-        amountETHMin = amountETHExpected - (slippage * amountETHExpected) / 1000;
-
-        (uint amountToken, uint amountETH) = IUniswapV2Router01(
+       
+        (amountToken,amountETH) = IUniswapV2Router01(
             UniswapRouter
         ).removeLiquidityETH(
             token,
@@ -462,26 +451,106 @@ contract WrapperEddyPoolsSwap is Ownable {
 
         TransferHelper.safeTransfer(token, EddyTreasurySafe, platformFeesForTx);
 
-        // require(IZRC20(token).transfer(owner(), platformFeesForTx), "FAILED TO TRANSFER TOKENS TO OWNER()");
-
         TransferHelper.safeTransfer(token, msg.sender, amountToken - platformFeesForTx);
-
-        // require(IZRC20(token).transfer(msg.sender, amountToken - platformFeesForTx), "TRANSFER OF ZRC20 FAILED eddyRemoveLiquidityEth");
 
         payable(msg.sender).transfer(amountETH);
 
-        // (int64 priceUintA, int32 expoA) = getPriceOfToken(token);
+       { 
+        
+            emit EddyLiquidityRemoved(
+                msg.sender,
+                token,
+                WZETA,
+                liquidity,
+                amountToken,
+                amountETH,
+                platformFeesForTx,
+                removeLiqToken1.priceUint,
+                removeLiqToken1.expo,
+                removeLiqToken2.priceUint,
+                removeLiqToken2.expo
+            );
 
-        // if (priceUintA == 0) revert NoPriceData();
+       }
 
-        emit EddyLiquidityRemoved(
+       
+
+    }
+
+    /// @notice Deposit ZETA for WZETA
+    /// @return amountOut The amount of WZETA received
+    function depositZetaForWZETA(bytes[] calldata priceUpdate,uint fee) external payable returns(uint256 amountOut) {
+        
+        (int64 priceUint, int32 expo) = getPythPrice(priceUpdate,addressToFeedId[ZETA]);
+        
+        IWETH9(WZETA).deposit{value: msg.value - 2 * fee}();
+
+        amountOut = IWETH9(WZETA).balanceOf(address(this));
+
+        // Got WETH at this point
+
+        // Fees for eddy
+        uint256 platformFeesForTx = (amountOut * platformFee) / 10000; 
+
+        IWETH9(WZETA).transfer(EddyTreasurySafe, platformFeesForTx);
+
+        IWETH9(WZETA).transfer(msg.sender, amountOut - platformFeesForTx);
+
+       
+
+
+        emit EddySwap(
             msg.sender,
-            token,
+            ZETA,
             WZETA,
-            liquidity,
-            amountToken,
-            amountETH,
-            platformFeesForTx
+            msg.value,
+            amountOut,
+            platformFeesForTx,
+            priceUint,
+            expo
+        );
+    }
+
+    /// @notice Withdraw WZETA for ZETA
+    /// @param amountIn The amount of WZETA to withdraw
+    /// @return amountOut The amount of ZETA received
+    function withdrawWZETA(uint256 amountIn, bytes[] calldata priceUpdate) external payable returns(uint256 amountOut) {
+
+        require(IWETH9(WZETA).allowance(msg.sender, address(this)) > amountIn, "NOT_ENOUGH_ALLOWANCE_WETH");
+
+        (int64 priceUint, int32 expo) = getPythPrice(priceUpdate,addressToFeedId[WZETA]);
+
+        bool sentToContract = IWETH9(WZETA).transferFrom(msg.sender, address(this), amountIn);
+
+        require(sentToContract, "FAILED TO TRANSFER WETH TO CONTRACT");
+
+        IWETH9(WZETA).withdraw(amountIn);
+
+        amountOut = amountIn;
+
+        // Got amountIn ETH
+        uint256 platformFeesForTx = (amountOut * platformFee) / 10000; 
+
+        
+
+        (bool sent, ) = payable(EddyTreasurySafe).call{value: platformFeesForTx}("");
+        require(sent, "Failed to send Ether to Eddy treasury");
+
+        (bool sentToUser, ) = payable(msg.sender).call{value: amountOut - platformFeesForTx}("");
+        require(sentToUser, "Failed to send Ether to User");
+
+        
+
+
+        emit EddySwap(
+            msg.sender,
+            WZETA,
+            ZETA,
+            amountIn,
+            amountOut,
+            platformFeesForTx,
+            priceUint,
+            expo
         );
 
     }
